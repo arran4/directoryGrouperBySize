@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
-	"directoryGrouperBySize"
 	"flag"
 	"fmt"
+	"github.com/arran4/directoryGrouperBySize"
 	"os"
 )
 
