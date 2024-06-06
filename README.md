@@ -1,5 +1,11 @@
 Takes a `du -sh` output, and then groups it into "disks" of a particular size.
 
+# Download / Install
+
+See: https://github.com/arran4/directoryGrouperBySize/releases For downloadable and installable versions.
+
+# Example
+
 Such as:
 
 ```
