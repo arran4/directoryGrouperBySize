@@ -48,7 +48,7 @@ func ConvertToStructArray(data []string) ([]Anime, error) {
 		case 'T':
 			sizeInGB = sizeInFloat * 1024 // Convert TB to GB
 		default:
-			return nil, fmt.Errorf("unknown size suffix: %s", sizeSuffix)
+			return nil, fmt.Errorf("unknown size suffix: %v", sizeSuffix)
 		}
 
 		// Create an Anime struct and add it to the result
