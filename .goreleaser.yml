@@ -1,4 +1,8 @@
 project_name: directoryGrouperBySize
+before:
+  hooks:
+    - go install github.com/cpuguy83/go-md2man/v2@latest
+    - go-md2man -in man/directoryGrouperBySize.md -out man/directoryGrouperBySize.1
 builds:
   -
     id: "directoryGrouperBySize"
@@ -22,6 +26,8 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
+    files:
+      - man/directoryGrouperBySize.1
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -38,7 +44,7 @@ nfpms:
     homepage: https://github.com/arran4/
     maintainer: Arran Ubels <arran@ubels.com.au>
     description: NA
-    license: Private
+    license: MIT
     formats:
       - apk
       - deb
@@ -46,3 +52,6 @@ nfpms:
     release: 1
     section: default
     priority: extra
+    contents:
+      - src: man/directoryGrouperBySize.1
+        dst: /usr/share/man/man1/directoryGrouperBySize.1
