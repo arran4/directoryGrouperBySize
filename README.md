@@ -1,53 +1,104 @@
-Takes a `du -sh` output, and then groups it into "disks" of a particular size.
+# directoryGrouperBySize
 
-# Download / Install
+`directoryGrouperBySize` helps plan how data will fit onto fixed-size storage.
+It reads a `du -sh` style listing and groups entries into virtual disks up to a
+specified size.
 
-See: https://github.com/arran4/directoryGrouperBySize/releases For downloadable and installable versions.
+## Installation
 
-# Example
+Pre-built binaries are available on the
+[releases page](https://github.com/arran4/directoryGrouperBySize/releases).
+To build from source you will need Go 1.22 or newer:
 
-Such as:
-
-```
-3.6G    FileFolder1
-1.6G    FileFolder2
-27G     FileFolder3
-52G     FileFolder4
-894M    FileFolder5
-7.5G    FileFolder6
-11G     FileFolder7
-2.3G    FileFolder8
-8.7G    FileFolder9
-13G     FileFolder10
-3.3G    FileFolder11
-1.7G    FileFolder12
-5.1G    FileFolder13
-4.3G    FileFolder14
+```bash
+go install github.com/arran4/directoryGrouperBySize/cmd/directoryGrouperBySize@latest
 ```
 
-Becomes:
+You can also clone the repository and build it manually:
+
+```bash
+git clone https://github.com/arran4/directoryGrouperBySize.git
+cd directoryGrouperBySize
+go build ./cmd/directoryGrouperBySize
 ```
-## Disk 1 (32.20 GB used, 22.80 GB free)
+
+## Usage
+
+```bash
+directoryGrouperBySize -maxsize 55 -f input.txt
+```
+
+You can also pipe data directly from `du`:
+
+```bash
+du -sh * | directoryGrouperBySize -maxsize 55
+```
+
+**Options**
+
+| Flag      | Description                                       |
+|-----------|---------------------------------------------------|
+| `-maxsize`| Maximum size in gigabytes for each group (required)|
+| `-f`      | Path to input file. If omitted, data is read from stdin |
+
+Input should match the output of `du -sh`, for example:
+
+```text
+25G    Movies
+18G    TVShows
+8G     Music
+5G     Documents
+3.6G   FileFolder1
+1.6G   FileFolder2
+27G    FileFolder3
+300M   Temp
+```
+
+### Example output
+
+```
+## Disk 1 (51.00 GB used, 4.00 GB free)
+Movies
+TVShows
+Music
+
+## Disk 2 (37.49 GB used, 17.51 GB free)
+Documents
 FileFolder1
 FileFolder2
 FileFolder3
-
-## Disk 2 (52.87 GB used, 2.13 GB free)
-FileFolder4
-FileFolder5
-
-## Disk 3 (52.60 GB used, 2.40 GB free)
-FileFolder6
-FileFolder7
-FileFolder8
-FileFolder9
-FileFolder10
-FileFolder11
-FileFolder12
-FileFolder13
-
-## Disk 4 (4.30 GB used, 50.70 GB free)
-FileFolder14
+Temp
 ```
 
-It's done by order of input. It shouldn't be too hard to add a best fit.
+Larger listings will be divided across multiple disks:
+
+```
+## Disk 1 (55.00 GB used, 0.00 GB free)
+Video1
+Video2
+
+## Disk 2 (40.00 GB used, 15.00 GB free)
+Video3
+```
+
+
+Release packages include a manual page installable via `man directoryGrouperBySize`.
+If you build from source, generate the man page with:
+
+```bash
+go install github.com/cpuguy83/go-md2man/v2@latest
+go-md2man -in man/directoryGrouperBySize.md -out directoryGrouperBySize.1
+sudo mv directoryGrouperBySize.1 /usr/share/man/man1/
+```
+
+## Development
+
+Run tests with:
+
+```bash
+go test ./...
+```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
