@@ -6,23 +6,52 @@ import (
 	"fmt"
 	"github.com/arran4/directoryGrouperBySize"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 func main() {
 	// Define the flags
 	fileFlag := flag.String("f", "", "File to read data from")
-	maxSizeFlag := flag.Float64("maxsize", 0, "Maximum size in GB for each disk")
+	scanFlag := flag.String("scan", "", "Directory to scan with du -sh")
+
+	var maxSizeGB float64
+	flag.Func("maxsize", "Maximum size per disk with optional unit suffix (default GB)", func(s string) error {
+		val, err := directoryGrouperBySize.SizeToGB(s, "GB")
+		if err != nil {
+			return err
+		}
+		maxSizeGB = val
+		return nil
+	})
 	flag.Parse()
 
-	if *maxSizeFlag <= 0 {
+	if maxSizeGB <= 0 {
 		fmt.Println("Please provide a valid -maxsize argument.")
 		return
 	}
 
 	var data []string
 
-	// Read from the specified file or stdin
-	if *fileFlag != "" {
+	switch {
+	case *scanFlag != "":
+		entries, err := os.ReadDir(*scanFlag)
+		if err != nil {
+			fmt.Printf("Error reading directory: %v\n", err)
+			return
+		}
+		for _, e := range entries {
+			path := filepath.Join(*scanFlag, e.Name())
+			cmd := exec.Command("du", "-sh", path)
+			out, err := cmd.Output()
+			if err != nil {
+				fmt.Printf("Error running du: %v\n", err)
+				return
+			}
+			data = append(data, strings.TrimSpace(string(out)))
+		}
+	case *fileFlag != "":
 		file, err := os.Open(*fileFlag)
 		if err != nil {
 			fmt.Printf("Error opening file: %v\n", err)
@@ -39,7 +68,7 @@ func main() {
 			fmt.Printf("Error reading file: %v\n", err)
 			return
 		}
-	} else {
+	default:
 		scanner := bufio.NewScanner(os.Stdin)
 		fmt.Println("Enter data (CTRL+D to end):")
 		for scanner.Scan() {
@@ -58,7 +87,7 @@ func main() {
 	var currentDiskSize float64
 
 	for _, anime := range animes {
-		if currentDiskSize+anime.SizeInGB > *maxSizeFlag {
+		if currentDiskSize+anime.SizeInGB > maxSizeGB {
 			disks = append(disks, currentDisk)
 			currentDisk = []directoryGrouperBySize.Anime{}
 			currentDiskSize = 0
@@ -76,7 +105,7 @@ func main() {
 		for _, anime := range disk {
 			diskSize += anime.SizeInGB
 		}
-		fmt.Printf("## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, *maxSizeFlag-diskSize)
+		fmt.Printf("## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, maxSizeGB-diskSize)
 		for _, anime := range disk {
 			fmt.Printf("%s\n", anime.Name)
 		}

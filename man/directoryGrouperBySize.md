@@ -5,7 +5,7 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 # SYNOPSIS
 
-`directoryGrouperBySize -maxsize <size> [-f file]`
+`directoryGrouperBySize -maxsize <size> [-f file] [-scan dir]`
 
 # DESCRIPTION
 
@@ -13,13 +13,17 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 # OPTIONS
 
-`-maxsize`  Maximum size in gigabytes for each disk (required).
+`-maxsize`  Maximum size for each disk. Accepts units (G, M, K, T) and defaults to gigabytes when omitted. (required).
 
 `-f`  Path to file to read listing from. If omitted, standard input is used.
 
+`-scan`  Run `du -sh` on the specified directory instead of reading input.
+
 # EXAMPLE
 
-`directoryGrouperBySize -maxsize 55 -f dirs.txt`
+`directoryGrouperBySize -maxsize 55G -f dirs.txt`
+
+`directoryGrouperBySize -maxsize 55G -scan /media`
 
 # SEE ALSO
 
