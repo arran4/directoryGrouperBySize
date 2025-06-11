@@ -76,24 +76,24 @@ func main() {
 		}
 	}
 
-	animes, err := directoryGrouperBySize.ConvertToStructArray(data)
+	entries, err := directoryGrouperBySize.ConvertToStructArray(data)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
 
-	var disks [][]directoryGrouperBySize.Anime
-	var currentDisk []directoryGrouperBySize.Anime
+	var disks [][]directoryGrouperBySize.Entry
+	var currentDisk []directoryGrouperBySize.Entry
 	var currentDiskSize float64
 
-	for _, anime := range animes {
-		if currentDiskSize+anime.SizeInGB > maxSizeGB {
+	for _, entry := range entries {
+		if currentDiskSize+entry.SizeInGB > maxSizeGB {
 			disks = append(disks, currentDisk)
-			currentDisk = []directoryGrouperBySize.Anime{}
+			currentDisk = []directoryGrouperBySize.Entry{}
 			currentDiskSize = 0
 		}
-		currentDisk = append(currentDisk, anime)
-		currentDiskSize += anime.SizeInGB
+		currentDisk = append(currentDisk, entry)
+		currentDiskSize += entry.SizeInGB
 	}
 
 	if len(currentDisk) > 0 {
@@ -102,12 +102,12 @@ func main() {
 
 	for i, disk := range disks {
 		var diskSize float64
-		for _, anime := range disk {
-			diskSize += anime.SizeInGB
+		for _, entry := range disk {
+			diskSize += entry.SizeInGB
 		}
 		fmt.Printf("## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, maxSizeGB-diskSize)
-		for _, anime := range disk {
-			fmt.Printf("%s\n", anime.Name)
+		for _, entry := range disk {
+			fmt.Printf("%s\n", entry.Name)
 		}
 		fmt.Println()
 	}
