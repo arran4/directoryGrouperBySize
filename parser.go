@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-// Anime represents the structure of each item
-type Anime struct {
+// Entry represents the size and name of one listing item.
+type Entry struct {
 	SizeInGB float64
 	Name     string
 }
 
-// ConvertToStructArray converts the list of strings to an array of Anime structs
+// ConvertToStructArray converts the list of strings to an array of Entry structs
 var sizeRegexp = regexp.MustCompile(`(?i)^([0-9]+(?:\.[0-9]+)?)([tgmk]?b?)$`)
 
 // SizeToGB converts a size string like "10G" or "500M" into gigabytes. The
@@ -52,9 +52,9 @@ func SizeToGB(sizeStr string, defaultUnit string) (float64, error) {
 	}
 }
 
-// ConvertToStructArray converts the list of strings to an array of Anime structs
-func ConvertToStructArray(data []string) ([]Anime, error) {
-	var result []Anime
+// ConvertToStructArray converts the list of strings to an array of Entry structs
+func ConvertToStructArray(data []string) ([]Entry, error) {
+	var result []Entry
 
 	for _, line := range data {
 		// Split the line into size and name parts
@@ -71,8 +71,8 @@ func ConvertToStructArray(data []string) ([]Anime, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Create an Anime struct and add it to the result
-		result = append(result, Anime{SizeInGB: sizeInGB, Name: name})
+		// Create an Entry struct and add it to the result
+		result = append(result, Entry{SizeInGB: sizeInGB, Name: name})
 	}
 
 	return result, nil
