@@ -25,23 +25,30 @@ go build ./cmd/directoryGrouperBySize
 ## Usage
 
 ```bash
-directoryGrouperBySize -maxsize 55 -f input.txt
+directoryGrouperBySize -maxsize 55G -f input.txt
+```
+
+Or let the tool run `du` for you:
+
+```bash
+directoryGrouperBySize -maxsize 55G -scan /media
 ```
 
 You can also pipe data directly from `du`:
 
 ```bash
-du -sh * | directoryGrouperBySize -maxsize 55
+du -sh * | directoryGrouperBySize -maxsize 55G
 ```
 
 **Options**
 
 | Flag      | Description                                       |
 |-----------|---------------------------------------------------|
-| `-maxsize`| Maximum size in gigabytes for each group (required)|
+| `-maxsize`| Maximum size for each group. Accepts G/GB, M/MB etc. Without a suffix GB is assumed. (required)|
 | `-f`      | Path to input file. If omitted, data is read from stdin |
+| `-scan`   | Run `du -sh` on this directory instead of reading input |
 
-Input should match the output of `du -sh`, for example:
+Input should match the output of `du -sh`. Units are case-insensitive and may include an optional `B`, for example:
 
 ```text
 25G    Movies
