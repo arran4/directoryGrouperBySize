@@ -1,19 +1,7 @@
 name: goreleaser
 
 permissions:
-    #  actions: read|write|none
-    #  checks: read|write|none
-    contents: write
-#  deployments: read|write|none
-#  id-token: read|write|none
-#  issues: read|write|none
-#  discussions: read|write|none
-#  packages: read|write|none
-#  pages: read|write|none
-#  pull-requests: read|write|none
-#  repository-projects: read|write|none
-#  security-events: read|write|none
-#  statuses: read|write|none
+  contents: write
 
 on:
   push:
@@ -25,28 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.22
-      - name: Cache-Go
-        uses: actions/cache@v1
-        with:
-          path: |
-            ~/go/pkg/mod              # Module download cache
-            ~/.cache/go-build         # Build cache (Linux)
-            ~/Library/Caches/go-build # Build cache (Mac)
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        uses: actions/setup-go@v5
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
-          args: release
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
