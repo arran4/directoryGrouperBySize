@@ -1,3 +1,4 @@
+version: 2
 project_name: directoryGrouperBySize
 before:
   hooks:
@@ -49,6 +50,8 @@ nfpms:
       - apk
       - deb
       - rpm
+      - termux.deb
+      - archlinux
     release: 1
     section: default
     priority: extra
