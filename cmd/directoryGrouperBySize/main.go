@@ -11,8 +11,15 @@ import (
 	"strings"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	// Define the flags
+	versionFlag := flag.Bool("version", false, "Print version information and exit")
 	fileFlag := flag.String("f", "", "File to read data from")
 	scanFlag := flag.String("scan", "", "Directory to scan with du -sh")
 
@@ -26,6 +33,11 @@ func main() {
 		return nil
 	})
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("directoryGrouperBySize %s\nCommit: %s\nDate: %s\n", version, commit, date)
+		return
+	}
 
 	if maxSizeGB <= 0 {
 		fmt.Println("Please provide a valid -maxsize argument.")
