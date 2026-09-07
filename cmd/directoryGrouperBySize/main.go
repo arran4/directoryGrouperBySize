@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/arran4/directoryGrouperBySize"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/arran4/directoryGrouperBySize"
 )
 
 var (
@@ -18,13 +20,22 @@ var (
 )
 
 func main() {
-	// Define the flags
-	versionFlag := flag.Bool("version", false, "Print version information and exit")
-	fileFlag := flag.String("f", "", "File to read data from")
-	scanFlag := flag.String("scan", "", "Directory to scan with du -sh")
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("directoryGrouperBySize", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	versionFlag := fs.Bool("version", false, "Print version information and exit")
+	fileFlag := fs.String("f", "", "File to read data from")
+	scanFlag := fs.String("scan", "", "Directory to scan with du -sh")
 
 	var maxSizeGB float64
-	flag.Func("maxsize", "Maximum size per disk with optional unit suffix (default GB)", func(s string) error {
+	fs.Func("maxsize", "Maximum size per disk with optional unit suffix (default GB)", func(s string) error {
 		val, err := directoryGrouperBySize.SizeToGB(s, "GB")
 		if err != nil {
 			return err
@@ -32,16 +43,22 @@ func main() {
 		maxSizeGB = val
 		return nil
 	})
-	flag.Parse()
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *versionFlag {
-		fmt.Printf("directoryGrouperBySize %s\nCommit: %s\nDate: %s\n", version, commit, date)
-		return
+		fmt.Fprintf(stdout, "directoryGrouperBySize %s\nCommit: %s\nDate: %s\n", version, commit, date)
+		return nil
 	}
 
 	if maxSizeGB <= 0 {
-		fmt.Println("Please provide a valid -maxsize argument.")
-		return
+		return fmt.Errorf("please provide a valid -maxsize argument")
+	}
+
+	if *fileFlag != "" && *scanFlag != "" {
+		return fmt.Errorf("cannot use both -f and -scan flags together")
 	}
 
 	var data []string
@@ -50,24 +67,21 @@ func main() {
 	case *scanFlag != "":
 		entries, err := os.ReadDir(*scanFlag)
 		if err != nil {
-			fmt.Printf("Error reading directory: %v\n", err)
-			return
+			return fmt.Errorf("error reading directory: %v", err)
 		}
 		for _, e := range entries {
 			path := filepath.Join(*scanFlag, e.Name())
 			cmd := exec.Command("du", "-sh", path)
 			out, err := cmd.Output()
 			if err != nil {
-				fmt.Printf("Error running du: %v\n", err)
-				return
+				return fmt.Errorf("error running du: %v", err)
 			}
 			data = append(data, strings.TrimSpace(string(out)))
 		}
 	case *fileFlag != "":
 		file, err := os.Open(*fileFlag)
 		if err != nil {
-			fmt.Printf("Error opening file: %v\n", err)
-			return
+			return fmt.Errorf("error opening file: %v", err)
 		}
 		defer file.Close()
 
@@ -75,41 +89,28 @@ func main() {
 		for scanner.Scan() {
 			data = append(data, scanner.Text())
 		}
-
 		if err := scanner.Err(); err != nil {
-			fmt.Printf("Error reading file: %v\n", err)
-			return
+			return fmt.Errorf("error reading file: %v", err)
 		}
 	default:
-		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Println("Enter data (CTRL+D to end):")
+		// Stdin
+		scanner := bufio.NewScanner(stdin)
 		for scanner.Scan() {
 			data = append(data, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("error reading stdin: %v", err)
 		}
 	}
 
 	entries, err := directoryGrouperBySize.ConvertToStructArray(data)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return fmt.Errorf("error converting input: %v", err)
 	}
 
-	var disks [][]directoryGrouperBySize.Entry
-	var currentDisk []directoryGrouperBySize.Entry
-	var currentDiskSize float64
-
-	for _, entry := range entries {
-		if currentDiskSize+entry.SizeInGB > maxSizeGB {
-			disks = append(disks, currentDisk)
-			currentDisk = []directoryGrouperBySize.Entry{}
-			currentDiskSize = 0
-		}
-		currentDisk = append(currentDisk, entry)
-		currentDiskSize += entry.SizeInGB
-	}
-
-	if len(currentDisk) > 0 {
-		disks = append(disks, currentDisk)
+	disks, err := directoryGrouperBySize.Group(entries, maxSizeGB)
+	if err != nil {
+		return fmt.Errorf("grouping failed: %v", err)
 	}
 
 	for i, disk := range disks {
@@ -117,10 +118,12 @@ func main() {
 		for _, entry := range disk {
 			diskSize += entry.SizeInGB
 		}
-		fmt.Printf("## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, maxSizeGB-diskSize)
+		fmt.Fprintf(stdout, "## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, maxSizeGB-diskSize)
 		for _, entry := range disk {
-			fmt.Printf("%s\n", entry.Name)
+			fmt.Fprintf(stdout, "%s\n", entry.Name)
 		}
-		fmt.Println()
+		fmt.Fprintln(stdout)
 	}
+
+	return nil
 }
