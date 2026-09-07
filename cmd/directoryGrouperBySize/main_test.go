@@ -2,35 +2,28 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-type mockScannerReader struct {
-	content string
-	err     error
+type errorReader struct {
+	err error
 }
 
-func (m *mockScannerReader) Read(p []byte) (n int, err error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	n = copy(p, []byte(m.content))
-	m.content = m.content[n:]
-	if len(m.content) == 0 {
-		return n, fmt.Errorf("EOF")
-	}
-	return n, nil
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, e.err
 }
 
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
-		stdin       string
+		stdin       io.Reader
 		expectError bool
 		errContains string
 		outContains string
@@ -40,63 +33,70 @@ func TestRun(t *testing.T) {
 		{
 			name:        "Missing maxsize",
 			args:        []string{},
+			stdin:       strings.NewReader(""),
 			expectError: true,
 			errContains: "please provide a valid -maxsize argument",
 		},
 		{
 			name:        "Invalid maxsize format",
 			args:        []string{"-maxsize", "xyz"},
+			stdin:       strings.NewReader(""),
 			expectError: true,
 			errContains: "invalid size format",
 		},
 		{
 			name:        "Conflicting flags",
 			args:        []string{"-maxsize", "5G", "-f", "dummy.txt", "-scan", "."},
+			stdin:       strings.NewReader(""),
 			expectError: true,
 			errContains: "cannot use both -f and -scan",
 		},
 		{
 			name:        "Valid run with stdin",
 			args:        []string{"-maxsize", "2G"},
-			stdin:       "1G folder1\n500M folder2\n",
+			stdin:       strings.NewReader("1G folder1\n500M folder2\n"),
 			expectError: false,
 			outContains: "Disk 1",
 		},
 		{
 			name:        "Oversized entry",
 			args:        []string{"-maxsize", "2G"},
-			stdin:       "3G folder1\n",
+			stdin:       strings.NewReader("3G folder1\n"),
 			expectError: true,
 			errContains: "entry exceeds capacity",
 		},
 		{
 			name:        "Version flag",
 			args:        []string{"-version"},
+			stdin:       strings.NewReader(""),
 			expectError: false,
 			outContains: "directoryGrouperBySize dev",
 		},
 		{
 			name:        "Malformed listing",
 			args:        []string{"-maxsize", "2G"},
-			stdin:       "invalid_listing_no_size",
+			stdin:       strings.NewReader("invalid_listing_no_size"),
 			expectError: true,
 			errContains: "invalid input format",
 		},
 		{
 			name:        "Unreadable input file",
 			args:        []string{"-maxsize", "2G", "-f", "nonexistent_file.txt"},
+			stdin:       strings.NewReader(""),
 			expectError: true,
 			errContains: "error opening file",
 		},
 		{
 			name:        "Invalid -scan directory",
 			args:        []string{"-maxsize", "2G", "-scan", "nonexistent_scan_dir"},
+			stdin:       strings.NewReader(""),
 			expectError: true,
 			errContains: "error reading directory",
 		},
 		{
-			name: "Failing du invocation",
-			args: []string{"-maxsize", "2G", "-scan", "mock_scan_dir"},
+			name:  "Failing du invocation",
+			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir"},
+			stdin: strings.NewReader(""),
 			setupFiles: func(dir string) {
 				os.MkdirAll(filepath.Join(dir, "mock_scan_dir"), 0755)
 				os.WriteFile(filepath.Join(dir, "mock_scan_dir", "a.txt"), []byte("data"), 0644)
@@ -108,8 +108,9 @@ func TestRun(t *testing.T) {
 			errContains: "error running du: mock du failed",
 		},
 		{
-			name: "du filename whitespace preservation",
-			args: []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
+			name:  "du filename whitespace preservation",
+			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
+			stdin: strings.NewReader(""),
 			setupFiles: func(dir string) {
 				os.MkdirAll(filepath.Join(dir, "mock_scan_dir_ws"), 0755)
 				os.WriteFile(filepath.Join(dir, "mock_scan_dir_ws", " trailing space "), []byte("data"), 0644)
@@ -121,12 +122,18 @@ func TestRun(t *testing.T) {
 			expectError: false,
 			outContains: " trailing space \n",
 		},
+		{
+			name:        "Stdin read error",
+			args:        []string{"-maxsize", "2G"},
+			stdin:       &errorReader{err: errors.New("simulated read error")},
+			expectError: true,
+			errContains: "error reading stdin: simulated read error",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			stdin := strings.NewReader(tc.stdin)
 
 			runner := execCommand
 			if tc.cmdRunner != nil {
@@ -149,7 +156,7 @@ func TestRun(t *testing.T) {
 				}
 			}
 
-			err := run(args, stdin, &stdout, &stderr, runner)
+			err := run(args, tc.stdin, &stdout, &stderr, runner)
 
 			if tc.expectError {
 				if err == nil {

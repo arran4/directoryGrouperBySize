@@ -28,3 +28,7 @@ directoryGrouperBySize - group directory listings into disks of a target size
 # SEE ALSO
 
 `du(1)`
+
+### Limitations
+
+- **Filename Line-Oriented Limitations**: `directoryGrouperBySize` relies on line-oriented input parsing. Therefore, filenames containing newline characters (`\n`) cannot be reliably parsed through piped input or files (`-f`).
