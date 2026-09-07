@@ -69,18 +69,23 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 
 		sizeStr := line[:idx]
 
-		// consume the block of contiguous whitespace that acts as separator
 		remainder := line[idx:]
 		sepLen := 0
-		for i, r := range remainder {
-			if r != ' ' && r != '\t' {
-				sepLen = i
-				break
+
+		// If the first delimiter character is a tab, consume exactly one tab.
+		// Otherwise (it's a space), consume the contiguous block of spaces.
+		if remainder[0] == '\t' {
+			sepLen = 1
+		} else {
+			for i, r := range remainder {
+				if r != ' ' {
+					sepLen = i
+					break
+				}
 			}
-		}
-		if sepLen == 0 {
-			// This shouldn't happen based on IndexAny, but just in case
-			sepLen = len(remainder)
+			if sepLen == 0 {
+				sepLen = len(remainder)
+			}
 		}
 
 		name := remainder[sepLen:]

@@ -10,6 +10,7 @@ func TestConvertToStructArray(t *testing.T) {
 		"300mb qux",
 		"1G    Photos  2025  ",
 		"1G\ttabs\tinside  ",
+		"1G\t  leading whitespace in name",
 		"",
 		"  \t  ",
 	}
@@ -17,8 +18,8 @@ func TestConvertToStructArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 6 {
-		t.Fatalf("expected 6 items, got %d", len(got))
+	if len(got) != 7 {
+		t.Fatalf("expected 7 items, got %d", len(got))
 	}
 	if got[0].Name != "foo" || got[0].SizeInGB != 1 {
 		t.Errorf("unexpected first item: %+v", got[0])
@@ -39,6 +40,9 @@ func TestConvertToStructArray(t *testing.T) {
 	}
 	if got[5].Name != "tabs\tinside  " || got[5].SizeInGB != 1 {
 		t.Errorf("unexpected sixth item: %+v", got[5])
+	}
+	if got[6].Name != "  leading whitespace in name" || got[6].SizeInGB != 1 {
+		t.Errorf("unexpected seventh item: %+v", got[6])
 	}
 }
 
