@@ -69,8 +69,21 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 
 		sizeStr := line[:idx]
 
-		// consume exactly one separator character (the first space or tab)
-		name := line[idx+1:]
+		// consume the block of contiguous whitespace that acts as separator
+		remainder := line[idx:]
+		sepLen := 0
+		for i, r := range remainder {
+			if r != ' ' && r != '\t' {
+				sepLen = i
+				break
+			}
+		}
+		if sepLen == 0 {
+			// This shouldn't happen based on IndexAny, but just in case
+			sepLen = len(remainder)
+		}
+
+		name := remainder[sepLen:]
 
 		if sizeStr == "" || name == "" {
 			return nil, fmt.Errorf("invalid input format: %s", line)
