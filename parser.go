@@ -68,7 +68,9 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 		}
 
 		sizeStr := line[:idx]
-		name := strings.TrimLeft(line[idx:], " \t")
+
+		// consume exactly one separator character (the first space or tab)
+		name := line[idx+1:]
 
 		if sizeStr == "" || name == "" {
 			return nil, fmt.Errorf("invalid input format: %s", line)

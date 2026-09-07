@@ -20,13 +20,21 @@ var (
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, execCommand); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+// execCommand is a variable to allow injection of a mock for testing du.
+var execCommand = func(name string, arg ...string) ([]byte, error) {
+	cmd := exec.Command(name, arg...)
+	return cmd.Output()
+}
+
+type execCmdFunc func(string, ...string) ([]byte, error)
+
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner execCmdFunc) error {
 	fs := flag.NewFlagSet("directoryGrouperBySize", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -71,12 +79,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 		for _, e := range entries {
 			path := filepath.Join(*scanFlag, e.Name())
-			cmd := exec.Command("du", "-sh", path)
-			out, err := cmd.Output()
+			out, err := cmdRunner("du", "-sh", path)
 			if err != nil {
 				return fmt.Errorf("error running du: %v", err)
 			}
-			data = append(data, strings.TrimSpace(string(out)))
+			// Only trim newlines, preserving any trailing spaces in the filename
+			trimmedOut := strings.TrimRight(string(out), "\r\n")
+			data = append(data, trimmedOut)
 		}
 	case *fileFlag != "":
 		file, err := os.Open(*fileFlag)

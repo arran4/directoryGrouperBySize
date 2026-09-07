@@ -109,3 +109,7 @@ go test ./...
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+### Limitations
+- **Filename Line-Oriented Limitations**: `directoryGrouperBySize` relies on line-oriented input, similar to standard utilities like `du`. Therefore, filenames containing newline characters (`\n`) cannot be correctly parsed when using piped input or reading from a file (`-f`).
+- **Input Sources**: The `-f` and `-scan` flags are mutually exclusive. Choose only one input source.

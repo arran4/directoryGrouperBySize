@@ -1,6 +1,9 @@
 package directoryGrouperBySize
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestGroup_Valid(t *testing.T) {
 	entries := []Entry{
@@ -49,6 +52,9 @@ func TestGroup_OversizedFirst(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for oversized entry")
 	}
+	if !strings.Contains(err.Error(), "A (4.00 GB)") {
+		t.Errorf("expected error to contain A (4.00 GB), got %v", err)
+	}
 }
 
 func TestGroup_OversizedLater(t *testing.T) {
@@ -60,5 +66,25 @@ func TestGroup_OversizedLater(t *testing.T) {
 	_, err := Group(entries, 3.0)
 	if err == nil {
 		t.Fatal("expected error for oversized entry")
+	}
+	if !strings.Contains(err.Error(), "B (4.00 GB)") {
+		t.Errorf("expected error to contain B (4.00 GB), got %v", err)
+	}
+}
+
+func TestGroup_MultipleOversized(t *testing.T) {
+	entries := []Entry{
+		{SizeInGB: 1, Name: "A"},
+		{SizeInGB: 4, Name: "B"},
+		{SizeInGB: 2, Name: "C"},
+		{SizeInGB: 5, Name: "D"},
+	}
+
+	_, err := Group(entries, 3.0)
+	if err == nil {
+		t.Fatal("expected error for oversized entries")
+	}
+	if !strings.Contains(err.Error(), "B (4.00 GB), D (5.00 GB)") {
+		t.Errorf("expected error to contain both B and D, got %v", err)
 	}
 }
