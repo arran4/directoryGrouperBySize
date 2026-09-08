@@ -3,13 +3,23 @@ package directoryGrouperBySize
 import "testing"
 
 func TestConvertToStructArray(t *testing.T) {
-	input := []string{"1G foo", "500M bar", "2gb baz", "300mb qux"}
+	input := []string{
+		"1G foo",
+		"500M bar",
+		"2gb baz",
+		"300mb qux",
+		"1G    Photos  2025  ",
+		"1G\ttabs\tinside  ",
+		"1G\t  leading whitespace in name",
+		"",
+		"  \t  ",
+	}
 	got, err := ConvertToStructArray(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 4 {
-		t.Fatalf("expected 4 items, got %d", len(got))
+	if len(got) != 7 {
+		t.Fatalf("expected 7 items, got %d", len(got))
 	}
 	if got[0].Name != "foo" || got[0].SizeInGB != 1 {
 		t.Errorf("unexpected first item: %+v", got[0])
@@ -25,12 +35,28 @@ func TestConvertToStructArray(t *testing.T) {
 	if got[3].Name != "qux" || got[3].SizeInGB != expectedSize2 {
 		t.Errorf("unexpected fourth item: %+v", got[3])
 	}
+	if got[4].Name != "Photos  2025  " || got[4].SizeInGB != 1 {
+		t.Errorf("unexpected fifth item: %+v", got[4])
+	}
+	if got[5].Name != "tabs\tinside  " || got[5].SizeInGB != 1 {
+		t.Errorf("unexpected sixth item: %+v", got[5])
+	}
+	if got[6].Name != "  leading whitespace in name" || got[6].SizeInGB != 1 {
+		t.Errorf("unexpected seventh item: %+v", got[6])
+	}
 }
 
 func TestConvertToStructArrayInvalid(t *testing.T) {
-	_, err := ConvertToStructArray([]string{"invalidline"})
-	if err == nil {
-		t.Fatal("expected error for invalid input")
+	tests := []string{
+		"invalidline",
+		"1G",
+		" 1G",
+	}
+	for _, tc := range tests {
+		_, err := ConvertToStructArray([]string{tc})
+		if err == nil {
+			t.Errorf("expected error for invalid input: %q", tc)
+		}
 	}
 }
 

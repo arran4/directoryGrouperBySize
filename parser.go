@@ -13,7 +13,6 @@ type Entry struct {
 	Name     string
 }
 
-// ConvertToStructArray converts the list of strings to an array of Entry structs
 var sizeRegexp = regexp.MustCompile(`(?i)^([0-9]+(?:\.[0-9]+)?)([tgmk]?b?)$`)
 
 // SizeToGB converts a size string like "10G" or "500M" into gigabytes. The
@@ -57,21 +56,49 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 	var result []Entry
 
 	for _, line := range data {
-		// Split the line into size and name parts
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
+		// skip purely blank lines
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		// Find the first whitespace to separate size and name
+		idx := strings.IndexAny(line, " \t")
+		if idx == -1 {
 			return nil, fmt.Errorf("invalid input format: %s", line)
 		}
 
-		// Join the remaining parts as the name
-		name := strings.Join(parts[1:], " ")
+		sizeStr := line[:idx]
 
-		sizeStr := parts[0]
+		remainder := line[idx:]
+		sepLen := 0
+
+		// If the first delimiter character is a tab, consume exactly one tab.
+		// Otherwise (it's a space), consume the contiguous block of spaces.
+		if remainder[0] == '\t' {
+			sepLen = 1
+		} else {
+			for i, r := range remainder {
+				if r != ' ' {
+					sepLen = i
+					break
+				}
+			}
+			if sepLen == 0 {
+				sepLen = len(remainder)
+			}
+		}
+
+		name := remainder[sepLen:]
+
+		if sizeStr == "" || name == "" {
+			return nil, fmt.Errorf("invalid input format: %s", line)
+		}
+
 		sizeInGB, err := SizeToGB(sizeStr, "B")
 		if err != nil {
 			return nil, err
 		}
-		// Create an Entry struct and add it to the result
+
 		result = append(result, Entry{SizeInGB: sizeInGB, Name: name})
 	}
 
