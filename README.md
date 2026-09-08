@@ -42,11 +42,15 @@ du -sh * | directoryGrouperBySize -maxsize 55G
 
 **Options**
 
-| Flag      | Description                                       |
-|-----------|---------------------------------------------------|
-| `-maxsize`| Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
-| `-f`      | Path to input file. If omitted, data is read from stdin |
-| `-scan`   | Run `du -sh` on this directory instead of reading input |
+| Flag        | Description                                       |
+|-------------|---------------------------------------------------|
+| `-maxsize`  | Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
+| `-f`        | Path to input file. If omitted, data is read from stdin |
+| `-scan`     | Run `du -sh` on this directory instead of reading input |
+| `-strategy` | Grouping algorithm strategy to use: `best-fit` (default) or `next-fit`. |
+
+**Grouping Strategies:**
+By default, the tool uses a **best-fit** decreasing strategy, which will reorder your input entries from largest to smallest to minimize the total number of disks and reduce wasted capacity. This optimization takes slightly more processing time (O(n log n)) but gives significantly better bin-packing. If preserving the original input order is critical to your use case, use `-strategy next-fit`, which fills disks sequentially (O(n) time).
 
 Input should match the output of `du -sh`. Units are case-insensitive and may include an optional `B` or `iB`.
 

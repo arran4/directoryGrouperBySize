@@ -12,7 +12,8 @@ func TestGroup_Valid(t *testing.T) {
 		{SizeBytes: 3 * 1024 * 1024 * 1024, Name: "C"}, // Should trigger a new disk if max is 3
 	}
 
-	disks, err := Group(entries, 3*1024*1024*1024)
+	// For standard valid test, let's use next-fit to match old behavior
+	disks, err := GroupWithStrategy(entries, 3*1024*1024*1024, "next-fit")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestGroup_AccumulatedRounding(t *testing.T) {
 		entries = append(entries, Entry{SizeBytes: smallSize, Name: "Small"})
 	}
 
-	disks, err := Group(entries, maxSizeBytes)
+	disks, err := GroupWithStrategy(entries, maxSizeBytes, "next-fit")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,7 +142,7 @@ func TestGroup_OverflowSafe(t *testing.T) {
 
 	// This should group them into two separate disks because (maxSizeBytes - 1) + 2 overflows maxSizeBytes.
 	// We pass maxSizeBytes as the capacity. Both individual entries are <= maxSizeBytes.
-	disks, err := Group(entries, maxSizeBytes)
+	disks, err := GroupWithStrategy(entries, maxSizeBytes, "next-fit")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,5 +155,130 @@ func TestGroup_OverflowSafe(t *testing.T) {
 	}
 	if len(disks[1]) != 1 || disks[1][0].Name != "B" {
 		t.Errorf("unexpected second disk: %+v", disks[1])
+	}
+}
+
+func TestGroup_NextFitVsBestFit(t *testing.T) {
+	// A scenario where next-fit performs worse than best-fit.
+	// Sizes: 6, 5, 4, 3, 2, capacity: 10
+	entries := []Entry{
+		{SizeBytes: 6, Name: "A"},
+		{SizeBytes: 5, Name: "B"},
+		{SizeBytes: 4, Name: "C"},
+		{SizeBytes: 3, Name: "D"},
+		{SizeBytes: 2, Name: "E"},
+	}
+
+	// Next-fit:
+	// Disk 1: 6 (remaining 4) - B (5) doesn't fit -> Disk 1: A
+	// Disk 2: 5 + 4 = 9 (remaining 1) - D (3) doesn't fit -> Disk 2: B, C
+	// Disk 3: 3 + 2 = 5 -> Disk 3: D, E
+	// Total 3 disks
+	nextFitDisks, err := GroupWithStrategy(entries, 10, "next-fit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(nextFitDisks) != 3 {
+		t.Fatalf("expected 3 disks for next-fit, got %d", len(nextFitDisks))
+	}
+
+	// Best-fit:
+	// Sorted: 6, 5, 4, 3, 2
+	// A(6) -> Disk 1 (rem 4)
+	// B(5) -> Disk 2 (rem 5)
+	// C(4) -> fits in Disk 1 (rem 4) perfectly -> Disk 1 (rem 0)
+	// D(3) -> fits in Disk 2 (rem 5) -> Disk 2 (rem 2)
+	// E(2) -> fits in Disk 2 (rem 2) perfectly -> Disk 2 (rem 0)
+	// Total 2 disks
+	bestFitDisks, err := GroupWithStrategy(entries, 10, "best-fit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(bestFitDisks) != 2 {
+		t.Fatalf("expected 2 disks for best-fit, got %d", len(bestFitDisks))
+	}
+
+	// Also test Group default behavior
+	defaultDisks, err := Group(entries, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(defaultDisks) != 2 {
+		t.Fatalf("expected default Group to use best-fit and return 2 disks, got %d", len(defaultDisks))
+	}
+}
+
+func TestGroup_BestFitDeterministicEqualSizes(t *testing.T) {
+	// Duplicated equal-sized entries should be placed deterministically.
+	entries := []Entry{
+		{SizeBytes: 5, Name: "A1"},
+		{SizeBytes: 5, Name: "A2"},
+		{SizeBytes: 5, Name: "A3"},
+	}
+
+	disks, err := GroupWithStrategy(entries, 6, "best-fit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(disks) != 3 {
+		t.Fatalf("expected 3 disks, got %d", len(disks))
+	}
+
+	// Should be A1, then A2, then A3 due to stable sorting criteria based on original index.
+	if disks[0][0].Name != "A1" || disks[1][0].Name != "A2" || disks[2][0].Name != "A3" {
+		t.Errorf("expected deterministic ordering A1, A2, A3; got %s, %s, %s", disks[0][0].Name, disks[1][0].Name, disks[2][0].Name)
+	}
+}
+
+func TestGroup_ZeroAndSmallSizes(t *testing.T) {
+	entries := []Entry{
+		{SizeBytes: 0, Name: "Zero1"},
+		{SizeBytes: 1, Name: "Small"},
+		{SizeBytes: 0, Name: "Zero2"},
+	}
+
+	disks, err := GroupWithStrategy(entries, 2, "best-fit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// BFD sorts descending, so 1 comes first, then the zeros.
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+	if len(disks[0]) != 3 {
+		t.Fatalf("expected 3 entries in disk, got %d", len(disks[0]))
+	}
+	// Small(1) is largest so it's first
+	if disks[0][0].Name != "Small" {
+		t.Errorf("expected Small to be first, got %s", disks[0][0].Name)
+	}
+}
+
+func TestGroup_BestFitExactAndNearCapacity(t *testing.T) {
+	entries := []Entry{
+		{SizeBytes: 5, Name: "Half"},
+		{SizeBytes: 4, Name: "NearHalf"},
+		{SizeBytes: 1, Name: "One"},
+	}
+	// Capacity 5
+	// Best-fit sorted: Half(5), NearHalf(4), One(1)
+	// Half -> Disk 1 (rem 0)
+	// NearHalf -> Disk 2 (rem 1)
+	// One -> fits in Disk 2 (rem 0)
+	disks, err := GroupWithStrategy(entries, 5, "best-fit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(disks) != 2 {
+		t.Fatalf("expected 2 disks, got %d", len(disks))
+	}
+	if len(disks[0]) != 1 || disks[0][0].Name != "Half" {
+		t.Errorf("Disk 1 incorrect")
+	}
+	if len(disks[1]) != 2 || disks[1][0].Name != "NearHalf" || disks[1][1].Name != "One" {
+		t.Errorf("Disk 2 incorrect")
 	}
 }
