@@ -42,13 +42,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner exe
 	fileFlag := fs.String("f", "", "File to read data from")
 	scanFlag := fs.String("scan", "", "Directory to scan with du -sh")
 
-	var maxSizeGB float64
+	var maxSizeBytes int64
 	fs.Func("maxsize", "Maximum size per disk with optional unit suffix (default GB)", func(s string) error {
-		val, err := directoryGrouperBySize.SizeToGB(s, "GB")
+		val, err := directoryGrouperBySize.ParseSize(s, "GB")
 		if err != nil {
 			return err
 		}
-		maxSizeGB = val
+		maxSizeBytes = val
 		return nil
 	})
 
@@ -61,7 +61,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner exe
 		return nil
 	}
 
-	if maxSizeGB <= 0 {
+	if maxSizeBytes <= 0 {
 		return fmt.Errorf("please provide a valid -maxsize argument")
 	}
 
@@ -117,17 +117,20 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner exe
 		return fmt.Errorf("error converting input: %v", err)
 	}
 
-	disks, err := directoryGrouperBySize.Group(entries, maxSizeGB)
+	disks, err := directoryGrouperBySize.Group(entries, maxSizeBytes)
 	if err != nil {
 		return fmt.Errorf("grouping failed: %v", err)
 	}
 
 	for i, disk := range disks {
-		var diskSize float64
+		var diskSizeBytes int64
 		for _, entry := range disk {
-			diskSize += entry.SizeInGB
+			diskSizeBytes += entry.SizeBytes
 		}
-		fmt.Fprintf(stdout, "## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, diskSize, maxSizeGB-diskSize)
+
+		usedGB := float64(diskSizeBytes) / (1024 * 1024 * 1024)
+		freeGB := float64(maxSizeBytes-diskSizeBytes) / (1024 * 1024 * 1024)
+		fmt.Fprintf(stdout, "## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, usedGB, freeGB)
 		for _, entry := range disk {
 			fmt.Fprintf(stdout, "%s\n", entry.Name)
 		}
