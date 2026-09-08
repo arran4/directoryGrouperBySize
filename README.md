@@ -44,11 +44,16 @@ du -sh * | directoryGrouperBySize -maxsize 55G
 
 | Flag      | Description                                       |
 |-----------|---------------------------------------------------|
-| `-maxsize`| Maximum size for each group. Accepts G/GB, M/MB etc. Without a suffix GB is assumed. (required)|
+| `-maxsize`| Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
 | `-f`      | Path to input file. If omitted, data is read from stdin |
 | `-scan`   | Run `du -sh` on this directory instead of reading input |
 
-Input should match the output of `du -sh`. Units are case-insensitive and may include an optional `B`, for example:
+Input should match the output of `du -sh`. Units are case-insensitive and may include an optional `B` or `iB`.
+
+**Note on unit semantics and API changes:**
+To provide exact boundary guarantees when grouping, sizes are stored and compared exactly using integers (`int64` bytes). Because standard `du -sh` output traditionally reports sizes using binary units (powers of 1024) but labels them without the "i" (e.g. `1G` or `1GB`), `directoryGrouperBySize` continues to interpret K, KB, M, MB, G, GB, T, and TB as 1024-based binary sizes to maintain compatibility with scripts and `du` itself. Unambiguous IEC suffixes (KiB, MiB, GiB, TiB) are also accepted and processed exactly the same way. The exported API (`Entry.SizeInGB` and `SizeToGB`) has been updated to use explicit `int64` bytes (`Entry.SizeBytes` and `ParseSize`) to support this exact bounding logic.
+
+For example:
 
 ```text
 25G    Movies

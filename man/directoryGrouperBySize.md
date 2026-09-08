@@ -9,11 +9,11 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 # DESCRIPTION
 
-`directoryGrouperBySize` reads a list of directory sizes, typically from `du -sh`, and groups entries into virtual disks up to the specified size in gigabytes.
+`directoryGrouperBySize` reads a list of directory sizes, typically from `du -sh`, and groups entries into virtual disks up to the specified size exactly. To maintain compatibility with `du`, suffixes like G and M are processed using binary 1024-based multipliers. IEC standard suffixes like GiB and MiB are also supported.
 
 # OPTIONS
 
-`-maxsize`  Maximum size for each disk. Accepts units (G, M, K, T) and defaults to gigabytes when omitted. (required).
+`-maxsize`  Maximum size for each disk. Accepts suffixes (G/GB/GiB, M/MB/MiB, K/KB/KiB, T/TB/TiB) and defaults to gigabytes when omitted. (required).
 
 `-f`  Path to file to read listing from. If omitted, standard input is used.
 
