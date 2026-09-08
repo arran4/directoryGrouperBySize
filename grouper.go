@@ -25,7 +25,9 @@ func Group(entries []Entry, maxSizeBytes int64) ([][]Entry, error) {
 	var currentDiskSize int64
 
 	for _, entry := range entries {
-		if currentDiskSize+entry.SizeBytes > maxSizeBytes {
+		// Overflow-safe check: check remaining capacity instead of adding
+		remaining := maxSizeBytes - currentDiskSize
+		if entry.SizeBytes > remaining {
 			disks = append(disks, currentDisk)
 			currentDisk = []Entry{}
 			currentDiskSize = 0

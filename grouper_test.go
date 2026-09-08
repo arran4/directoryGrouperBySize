@@ -130,3 +130,29 @@ func TestGroup_AccumulatedRounding(t *testing.T) {
 		t.Fatalf("expected %d entries on the disk, got %d", count, len(disks[0]))
 	}
 }
+
+func TestGroup_OverflowSafe(t *testing.T) {
+	// math.MaxInt64 is 9223372036854775807
+	maxSizeBytes := int64(9223372036854775807)
+	entries := []Entry{
+		{SizeBytes: maxSizeBytes - 1, Name: "A"},
+		{SizeBytes: 2, Name: "B"},
+	}
+
+	// This should group them into two separate disks because (maxSizeBytes - 1) + 2 overflows maxSizeBytes.
+	// We pass maxSizeBytes as the capacity. Both individual entries are <= maxSizeBytes.
+	disks, err := Group(entries, maxSizeBytes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(disks) != 2 {
+		t.Fatalf("expected 2 disks, got %d", len(disks))
+	}
+	if len(disks[0]) != 1 || disks[0][0].Name != "A" {
+		t.Errorf("unexpected first disk: %+v", disks[0])
+	}
+	if len(disks[1]) != 1 || disks[1][0].Name != "B" {
+		t.Errorf("unexpected second disk: %+v", disks[1])
+	}
+}

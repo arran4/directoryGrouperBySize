@@ -1,6 +1,7 @@
 package directoryGrouperBySize
 
 import "testing"
+import "math"
 
 func TestConvertToStructArray(t *testing.T) {
 	input := []string{
@@ -82,9 +83,17 @@ func TestParseSize(t *testing.T) {
 		{"2T", "GB", 2 * 1024 * 1024 * 1024 * 1024},
 		{"2TiB", "GB", 2 * 1024 * 1024 * 1024 * 1024},
 		// Deterministic fractional inputs
-		{"1.5G", "B", 1.5 * 1024 * 1024 * 1024},
-		{"1.5GB", "B", 1.5 * 1024 * 1024 * 1024},
-		{"1.5GiB", "B", 1.5 * 1024 * 1024 * 1024},
+		{"1.5G", "B", int64(1.5 * 1024 * 1024 * 1024)},
+		{"1.5GB", "B", int64(1.5 * 1024 * 1024 * 1024)},
+		{"1.5GiB", "B", int64(1.5 * 1024 * 1024 * 1024)},
+
+		// Large inputs past float64 mantissa exact representability
+		{"9007199254740993B", "GB", 9007199254740993}, // 2^53 + 1
+		{"9223372036854775807B", "GB", math.MaxInt64}, // MaxInt64
+
+		// Rounding check
+		{"1.5B", "GB", 2},
+		{"1.4B", "GB", 1},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +103,24 @@ func TestParseSize(t *testing.T) {
 		}
 		if got != tt.expect {
 			t.Errorf("ParseSize(%q, %q) = %v, want %v", tt.in, tt.def, got, tt.expect)
+		}
+	}
+}
+
+func TestParseSize_Overflow(t *testing.T) {
+	tests := []struct {
+		in  string
+		def string
+	}{
+		{"9223372036854775808B", "GB"}, // math.MaxInt64 + 1
+		{"10000000000000000000B", "GB"},
+		{"9223372036854775807.5B", "GB"}, // Rounds up to math.MaxInt64 + 1
+	}
+
+	for _, tt := range tests {
+		_, err := ParseSize(tt.in, tt.def)
+		if err == nil {
+			t.Errorf("expected error for overflow size %s, got nil", tt.in)
 		}
 	}
 }

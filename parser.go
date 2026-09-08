@@ -2,9 +2,9 @@ package directoryGrouperBySize
 
 import (
 	"fmt"
-	"math"
+
+	"math/big"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -29,17 +29,13 @@ func ParseSize(sizeStr string, defaultUnit string) (int64, error) {
 		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
 	}
 
-	sizeInFloat, err := strconv.ParseFloat(matches[1], 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid size value: %s", matches[1])
-	}
-
+	sizeValStr := matches[1]
 	unit := strings.ToUpper(matches[2])
 	if unit == "" {
 		unit = strings.ToUpper(defaultUnit)
 	}
 
-	var multiplier float64
+	var multiplier int64
 
 	switch unit {
 	case "B":
@@ -56,7 +52,34 @@ func ParseSize(sizeStr string, defaultUnit string) (int64, error) {
 		return 0, fmt.Errorf("unknown size suffix: %s", unit)
 	}
 
-	return int64(math.Round(sizeInFloat * multiplier)), nil
+	// Use math/big to handle large sizes exactly without float64 precision loss.
+	// Parse as a big.Rat to cleanly handle fractional inputs.
+	rat, ok := new(big.Rat).SetString(sizeValStr)
+	if !ok {
+		return 0, fmt.Errorf("invalid size value: %s", sizeValStr)
+	}
+
+	// Multiply by unit
+	rat.Mul(rat, new(big.Rat).SetInt64(multiplier))
+
+	// Round to nearest integer (half away from zero)
+	// We extract the float64 representation of the fractional part and round it
+	// For huge numbers we must be careful.
+
+	// Add 1/2 to round half up.
+	half := big.NewRat(1, 2)
+	rat.Add(rat, half)
+
+	// Truncate to int
+	intVal := new(big.Int)
+	intVal.Div(rat.Num(), rat.Denom())
+
+	// Check if it fits in int64
+	if !intVal.IsInt64() {
+		return 0, fmt.Errorf("size out of range for int64: %s", sizeStr)
+	}
+
+	return intVal.Int64(), nil
 }
 
 // FormatBytesGB formats a byte count into a GB string for display, using 1024-based GB.
