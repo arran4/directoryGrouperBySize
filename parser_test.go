@@ -1,7 +1,9 @@
 package directoryGrouperBySize
 
-import "testing"
-import "math"
+import (
+	"math"
+	"testing"
+)
 
 func TestConvertToStructArray(t *testing.T) {
 	input := []string{

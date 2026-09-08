@@ -2,7 +2,6 @@ package directoryGrouperBySize
 
 import (
 	"fmt"
-
 	"math/big"
 	"regexp"
 	"strings"
@@ -63,9 +62,6 @@ func ParseSize(sizeStr string, defaultUnit string) (int64, error) {
 	rat.Mul(rat, new(big.Rat).SetInt64(multiplier))
 
 	// Round to nearest integer (half away from zero)
-	// We extract the float64 representation of the fractional part and round it
-	// For huge numbers we must be careful.
-
 	// Add 1/2 to round half up.
 	half := big.NewRat(1, 2)
 	rat.Add(rat, half)
