@@ -18,7 +18,7 @@ func TestConvertToStructArray(t *testing.T) {
 		"",
 		"  \t  ",
 	}
-	got, err := ConvertToStructArray(input, false)
+	got, err := ConvertToStructArray(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestConvertToStructArrayInvalid(t *testing.T) {
 		" 1G",
 	}
 	for _, tc := range tests {
-		_, err := ConvertToStructArray([]string{tc}, false)
+		_, err := ConvertToStructArray([]string{tc})
 		if err == nil {
 			t.Errorf("expected error for invalid input: %q", tc)
 		}
@@ -68,16 +68,15 @@ func TestConvertToStructArray_NulMode(t *testing.T) {
 	input := []string{
 		"1G\tfoo",
 		"500M\tbar\nwith\nnewlines",
-		"2gb baz", // space as separator
 		"1G\t  leading spaces preserved",
-		"1G \ttabs inside  ",
+		"1G\t\ttabs inside  ", // Note: size\t\tname -> name="\ttabs inside  "
 	}
-	got, err := ConvertToStructArray(input, true)
+	got, err := ConvertToStructArrayNulMode(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 5 {
-		t.Fatalf("expected 5 items, got %d", len(got))
+	if len(got) != 4 {
+		t.Fatalf("expected 4 items, got %d", len(got))
 	}
 	if got[0].Name != "foo" || got[0].SizeBytes != 1024*1024*1024 {
 		t.Errorf("unexpected first item: %+v", got[0])
@@ -86,14 +85,11 @@ func TestConvertToStructArray_NulMode(t *testing.T) {
 	if got[1].Name != "bar\nwith\nnewlines" || got[1].SizeBytes != expectedSize {
 		t.Errorf("unexpected second item: %+v", got[1])
 	}
-	if got[2].Name != "baz" || got[2].SizeBytes != 2*1024*1024*1024 {
+	if got[2].Name != "  leading spaces preserved" || got[2].SizeBytes != 1024*1024*1024 {
 		t.Errorf("unexpected third item: %+v", got[2])
 	}
-	if got[3].Name != "  leading spaces preserved" || got[3].SizeBytes != 1024*1024*1024 {
+	if got[3].Name != "\ttabs inside  " || got[3].SizeBytes != 1024*1024*1024 {
 		t.Errorf("unexpected fourth item: %+v", got[3])
-	}
-	if got[4].Name != "\ttabs inside  " || got[4].SizeBytes != 1024*1024*1024 {
-		t.Errorf("unexpected fifth item: %+v", got[4])
 	}
 }
 
@@ -102,9 +98,11 @@ func TestConvertToStructArray_NulModeInvalid(t *testing.T) {
 		"invalidline",
 		"1G",
 		"",
+		"2gb baz", // space as separator should fail in NUL mode
+		"1G  space instead of tab",
 	}
 	for _, tc := range tests {
-		_, err := ConvertToStructArray([]string{tc}, true)
+		_, err := ConvertToStructArrayNulMode([]string{tc})
 		if err == nil {
 			t.Errorf("expected error for invalid nul input: %q", tc)
 		}
@@ -179,7 +177,7 @@ func TestConvertToStructArray_EmptyFilename(t *testing.T) {
 	input := []string{
 		"1G\t",
 	}
-	_, err := ConvertToStructArray(input, true)
+	_, err := ConvertToStructArrayNulMode(input)
 	if err == nil {
 		t.Fatalf("expected error for empty filename in NUL mode, got nil")
 	}
@@ -190,7 +188,7 @@ func TestConvertToStructArray_EmptyFilename(t *testing.T) {
 	inputLineOriented := []string{
 		"1G\t",
 	}
-	_, err = ConvertToStructArray(inputLineOriented, false)
+	_, err = ConvertToStructArray(inputLineOriented)
 	if err == nil {
 		t.Fatalf("expected error for empty filename in line-oriented mode, got nil")
 	}

@@ -112,7 +112,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 
 		var err error
-		entries, err = directoryGrouperBySize.ConvertToStructArray(data, nulMode)
+		if nulMode {
+			entries, err = directoryGrouperBySize.ConvertToStructArrayNulMode(data)
+		} else {
+			entries, err = directoryGrouperBySize.ConvertToStructArray(data)
+		}
 		if err != nil {
 			return fmt.Errorf("error converting input: %v", err)
 		}

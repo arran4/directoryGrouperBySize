@@ -84,15 +84,13 @@ func FormatBytesGB(bytes int64) string {
 }
 
 // ConvertToStructArray converts the list of strings to an array of Entry structs
-func ConvertToStructArray(data []string, nulMode bool) ([]Entry, error) {
+func ConvertToStructArray(data []string) ([]Entry, error) {
 	var result []Entry
 
 	for _, line := range data {
-		if !nulMode {
-			// skip purely blank lines
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
+		// skip purely blank lines
+		if strings.TrimSpace(line) == "" {
+			continue
 		}
 
 		// Find the first whitespace to separate size and name
@@ -106,24 +104,19 @@ func ConvertToStructArray(data []string, nulMode bool) ([]Entry, error) {
 		remainder := line[idx:]
 		sepLen := 0
 
-		if nulMode {
-			// In NUL mode, consume exactly one field separator byte (space or tab)
+		// If the first delimiter character is a tab, consume exactly one tab.
+		// Otherwise (it's a space), consume the contiguous block of spaces.
+		if remainder[0] == '\t' {
 			sepLen = 1
 		} else {
-			// If the first delimiter character is a tab, consume exactly one tab.
-			// Otherwise (it's a space), consume the contiguous block of spaces.
-			if remainder[0] == '\t' {
-				sepLen = 1
-			} else {
-				for i, r := range remainder {
-					if r != ' ' {
-						sepLen = i
-						break
-					}
+			for i, r := range remainder {
+				if r != ' ' {
+					sepLen = i
+					break
 				}
-				if sepLen == 0 {
-					sepLen = len(remainder)
-				}
+			}
+			if sepLen == 0 {
+				sepLen = len(remainder)
 			}
 		}
 
@@ -131,6 +124,36 @@ func ConvertToStructArray(data []string, nulMode bool) ([]Entry, error) {
 
 		if sizeStr == "" || name == "" {
 			return nil, fmt.Errorf("invalid input format: %s", line)
+		}
+
+		sizeBytes, err := ParseSize(sizeStr, "B")
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, Entry{SizeBytes: sizeBytes, Name: name})
+	}
+
+	return result, nil
+}
+
+// ConvertToStructArrayNulMode converts the list of NUL-delimited strings to an array of Entry structs,
+// requiring a strict tab separator between the size and the un-normalized filename.
+func ConvertToStructArrayNulMode(data []string) ([]Entry, error) {
+	var result []Entry
+
+	for _, line := range data {
+		// In NUL mode, the separator must be a tab.
+		idx := strings.IndexByte(line, '\t')
+		if idx == -1 {
+			return nil, fmt.Errorf("invalid input format: missing tab separator in record: %q", line)
+		}
+
+		sizeStr := line[:idx]
+		name := line[idx+1:] // Consume exactly one tab byte
+
+		if sizeStr == "" || name == "" {
+			return nil, fmt.Errorf("invalid input format: empty size or name in record: %q", line)
 		}
 
 		sizeBytes, err := ParseSize(sizeStr, "B")
