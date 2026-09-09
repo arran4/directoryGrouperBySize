@@ -83,24 +83,35 @@ func TestScanDirectory(t *testing.T) {
 				t.Errorf("expected 5 bytes for file3.txt, got %d", entry.SizeBytes)
 			}
 		} else if entry.Name == "sub1" {
-			// directory apparent size usually includes 4096 bytes on Linux for the dir itself.
-			// Let's just check that it's at least 15+25 = 40.
-			if entry.SizeBytes < 40 {
-				t.Errorf("expected at least 40 bytes for sub1, got %d", entry.SizeBytes)
+			// Expected logical size is precisely the sum of non-directory files inside.
+			if entry.SizeBytes != 40 {
+				t.Errorf("expected exactly 40 bytes for sub1, got %d", entry.SizeBytes)
 			}
 		} else {
 			t.Errorf("unexpected entry %q", entry.Name)
 		}
 	}
 
-	// 4. Symlink semantics
+	// 4. Symlink semantics (Immediate and Nested)
 	symlinkDir := filepath.Join(tmpDir, "symlinks")
 	os.Mkdir(symlinkDir, 0755)
+
+	// Create a target directory and file
+	targetDir := filepath.Join(symlinkDir, "target_dir")
+	os.Mkdir(targetDir, 0755)
+	os.WriteFile(filepath.Join(targetDir, "huge.txt"), make([]byte, 500), 0644)
+
 	targetFile := filepath.Join(symlinkDir, "target.txt")
 	os.WriteFile(targetFile, make([]byte, 100), 0644)
+
+	// Create symlinks
 	linkPath := filepath.Join(symlinkDir, "link.txt")
-	err = os.Symlink("target.txt", linkPath)
-	if err == nil {
+	dirLinkPath := filepath.Join(symlinkDir, "dir_link")
+
+	errFileSym := os.Symlink("target.txt", linkPath)
+	errDirSym := os.Symlink("target_dir", dirLinkPath)
+
+	if errFileSym == nil && errDirSym == nil {
 		entries, err = ScanDirectory(ctx, symlinkDir)
 		if err != nil {
 			t.Errorf("expected no error for symlink dir, got %v", err)
@@ -112,29 +123,51 @@ func TestScanDirectory(t *testing.T) {
 					t.Errorf("symlink should have size of link itself, not target. Got %d bytes", entry.SizeBytes)
 				}
 			}
+			if entry.Name == "dir_link" {
+				if entry.SizeBytes >= 500 {
+					t.Errorf("symlink to dir should NOT traverse target. Got %d bytes (expected tiny link size)", entry.SizeBytes)
+				}
+			}
 		}
 	} else {
-		t.Logf("skipping symlink test as symlink creation failed (common on Windows without admin): %v", err)
+		t.Logf("skipping symlink test as symlink creation failed (common on Windows without admin): file=%v dir=%v", errFileSym, errDirSym)
 	}
 
 	// 5. Unreadable directory (permission error)
-	// This test might not work as expected on Windows or if running as root
 	unreadableDir := filepath.Join(tmpDir, "unreadable")
 	os.Mkdir(unreadableDir, 0755)
 	subUnreadable := filepath.Join(unreadableDir, "sub")
-	os.Mkdir(subUnreadable, 0000) // no permissions
+	os.Mkdir(subUnreadable, 0000) // remove permissions
 
-	_, err = ScanDirectory(ctx, unreadableDir)
-	if err == nil {
-		t.Logf("Expected error scanning unreadable directory, got none. This can happen on Windows or when running tests as root.")
+	// Verify if environment actually honors 0000
+	_, verifyErr := os.ReadDir(subUnreadable)
+
+	if verifyErr != nil {
+		_, err = ScanDirectory(ctx, unreadableDir)
+		if err == nil {
+			t.Errorf("expected error scanning unreadable directory, got none")
+		}
 	} else {
-		t.Logf("Got expected error scanning unreadable directory: %v", err)
+		t.Logf("Skipping strict permission error test. Environment (e.g. Windows/Root) does not restrict reading dir with 0000 perms.")
 	}
 
 	// restore permissions so os.RemoveAll can clean it up later
 	os.Chmod(subUnreadable, 0755)
 
-	// 6. Large file
+	// 6. Context cancellation
+	cancelDir := filepath.Join(tmpDir, "cancel")
+	os.Mkdir(cancelDir, 0755)
+	os.WriteFile(filepath.Join(cancelDir, "a.txt"), make([]byte, 10), 0644)
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, err = ScanDirectory(cancelCtx, cancelDir)
+	if err == nil || err != context.Canceled {
+		t.Errorf("expected context.Canceled error, got %v", err)
+	}
+
+	// 7. Large file
 	largeDir := filepath.Join(tmpDir, "large")
 	os.Mkdir(largeDir, 0755)
 	largeFile := filepath.Join(largeDir, "large.dat")

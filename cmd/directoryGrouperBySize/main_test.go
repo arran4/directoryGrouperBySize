@@ -92,7 +92,7 @@ func TestRun(t *testing.T) {
 			errContains: "error reading directory",
 		},
 		{
-			name:  "du filename whitespace preservation",
+			name:  "Filename whitespace preservation",
 			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
 			stdin: strings.NewReader(""),
 			setupFiles: func(dir string) {

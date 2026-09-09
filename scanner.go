@@ -14,13 +14,15 @@ import (
 // avoiding human-readable string round-tripping.
 //
 // Size calculation semantics:
-//   - Uses logical/apparent file bytes (os.FileInfo.Size()), not allocated block usage.
-//   - Does not follow symlinks outside or inside the hierarchy; symlinks count
-//     only as their own link length.
-//   - Hard links are counted per directory entry (if a file is hard-linked twice in the
-//     scanned directory, its size is counted twice).
-//   - Fails cleanly and immediately on permission errors (does not silently omit unreadable files).
-//   - Preserves exact names supported by the filesystem/API.
+//   - Uses logical/apparent file sizes (bytes), not allocated filesystem block usage.
+//   - Directory sizes are calculated as the recursive sum of non-directory entries
+//     (regular files and symlinks), excluding directory metadata itself to guarantee
+//     exact cross-platform determinism.
+//   - Symlinks are not followed either inside or outside the hierarchy. A symlink's size
+//     is counted only as its own link length.
+//   - Hard links are counted individually per directory entry encountered.
+//   - Fails cleanly and immediately on permission errors (does not silently omit capacities).
+//   - Preserves exact filenames as provided by the filesystem (including spaces and newlines).
 func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 	dirEntries, err := os.ReadDir(root)
 	if err != nil {
@@ -54,12 +56,14 @@ func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 					return err
 				}
 
-				dInfo, err := d.Info()
-				if err != nil {
-					return fmt.Errorf("error getting info for %q: %w", path, err)
-				}
+				if !d.IsDir() {
+					dInfo, err := d.Info()
+					if err != nil {
+						return fmt.Errorf("error getting info for %q: %w", path, err)
+					}
 
-				totalSize += dInfo.Size()
+					totalSize += dInfo.Size()
+				}
 				return nil
 			})
 			if err != nil {
