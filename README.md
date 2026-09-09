@@ -122,7 +122,8 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ### Using NUL-Delimited Input
 The existing line-oriented mode (without `-0` or `--null`) separates entries with newlines. This limits the safe representation of filenames that contain embedded newline characters.
-To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag:
+To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag. The expected format is `<size>\t<filename>\0`. The first tab character (`\t`) is strictly required as the field separator; every byte after it up to the NUL byte is preserved exactly as the filename, including leading/trailing spaces, additional tabs, and embedded newlines.
+
 ```bash
 find . -maxdepth 1 -print0 | xargs -0 du -sh -0 | directoryGrouperBySize -maxsize 55G -0
 ```
@@ -133,7 +134,7 @@ find . -maxdepth 1 -print0 | xargs -0 du -sh -0 | directoryGrouperBySize -maxsiz
 - **Input Sources**: The `-f` and `-scan` flags are mutually exclusive. Choose only one input source.
 
 ### Scan Semantics
-The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable (especially on Windows) as part of a separate native-scanning follow-up in #11. Its deterministic logical-size contract is explicitly defined as:
+The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable (especially on Windows). Its deterministic logical-size contract is explicitly defined as:
 - **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Regular files contribute their exact logical byte length.
 - **Directories:** Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries.
 - **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. They contribute their platform/filesystem-dependent link metadata size.

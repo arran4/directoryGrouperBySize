@@ -37,7 +37,7 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 ### Using NUL-Delimited Input
 The existing line-oriented mode (without `-0` or `--null`) separates entries with newlines. This limits the safe representation of filenames that contain embedded newline characters.
-To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag, like the `du -0` example above.
+To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag, like the `du -0` example above. The expected format is `<size>\t<filename>\0`. The first tab character (`\t`) is strictly required as the field separator; every byte after it up to the NUL byte is preserved exactly as the filename, including leading/trailing spaces, additional tabs, and embedded newlines.
 
 ### Limitations
 
@@ -45,7 +45,7 @@ To parse filenames with embedded newlines, use a NUL-delimited format and pass t
 
 # SCAN SEMANTICS
 
-The `-scan` flag uses an internal Go scanning backend instead of an external `du` command. This native-scanning is a separate follow-up tracked in #11. Its deterministic logical-size contract is explicitly defined as:
+The `-scan` flag uses an internal Go scanning backend instead of an external `du` command. Its deterministic logical-size contract is explicitly defined as:
 
 *   **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Regular files contribute their exact logical byte length.
 *   **Directories:** Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries.

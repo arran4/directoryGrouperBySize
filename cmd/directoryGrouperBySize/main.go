@@ -113,7 +113,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 		var err error
 		if nulMode {
-			entries, err = directoryGrouperBySize.ConvertToStructArrayNulMode(data)
+			entries, err = directoryGrouperBySize.ConvertToStructArrayNULMode(data)
 		} else {
 			entries, err = directoryGrouperBySize.ConvertToStructArray(data)
 		}

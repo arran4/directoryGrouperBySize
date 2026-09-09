@@ -137,9 +137,9 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 	return result, nil
 }
 
-// ConvertToStructArrayNulMode converts the list of NUL-delimited strings to an array of Entry structs,
+// ConvertToStructArrayNULMode converts the list of NUL-delimited strings to an array of Entry structs,
 // requiring a strict tab separator between the size and the un-normalized filename.
-func ConvertToStructArrayNulMode(data []string) ([]Entry, error) {
+func ConvertToStructArrayNULMode(data []string) ([]Entry, error) {
 	var result []Entry
 
 	for _, line := range data {

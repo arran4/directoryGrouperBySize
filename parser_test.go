@@ -71,7 +71,7 @@ func TestConvertToStructArray_NulMode(t *testing.T) {
 		"1G\t  leading spaces preserved",
 		"1G\t\ttabs inside  ", // Note: size\t\tname -> name="\ttabs inside  "
 	}
-	got, err := ConvertToStructArrayNulMode(input)
+	got, err := ConvertToStructArrayNULMode(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestConvertToStructArray_NulModeInvalid(t *testing.T) {
 		"1G  space instead of tab",
 	}
 	for _, tc := range tests {
-		_, err := ConvertToStructArrayNulMode([]string{tc})
+		_, err := ConvertToStructArrayNULMode([]string{tc})
 		if err == nil {
 			t.Errorf("expected error for invalid nul input: %q", tc)
 		}
@@ -177,7 +177,7 @@ func TestConvertToStructArray_EmptyFilename(t *testing.T) {
 	input := []string{
 		"1G\t",
 	}
-	_, err := ConvertToStructArrayNulMode(input)
+	_, err := ConvertToStructArrayNULMode(input)
 	if err == nil {
 		t.Fatalf("expected error for empty filename in NUL mode, got nil")
 	}
