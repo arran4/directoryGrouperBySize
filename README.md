@@ -42,11 +42,15 @@ du -sh * | directoryGrouperBySize -maxsize 55G
 
 **Options**
 
-| Flag      | Description                                       |
-|-----------|---------------------------------------------------|
-| `-maxsize`| Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
-| `-f`      | Path to input file. If omitted, data is read from stdin |
-| `-scan`   | Run `du -sh` on this directory instead of reading input |
+| Flag        | Description                                       |
+|-------------|---------------------------------------------------|
+| `-maxsize`  | Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
+| `-f`        | Path to input file. If omitted, data is read from stdin |
+| `-scan`     | Run `du -sh` on this directory instead of reading input |
+| `-strategy` | Grouping algorithm strategy to use: `first-fit-decreasing` (default) or `next-fit`. |
+
+**Grouping Strategies:**
+By default, the tool uses a **first-fit-decreasing** strategy (an optimized First-Fit Decreasing algorithm implemented via a segment tree for deterministic O(n log n) total time). This reorders your input entries from largest to smallest to minimize the total number of disks and reduce wasted capacity efficiently even on very large directory listings. It is a heuristic and does not guarantee the absolute optimal disk count, but performs well. If preserving the original input order is critical to your use case, use `-strategy next-fit`, which fills disks sequentially in O(n) time. The alias `best-fit` is supported as a legacy compatibility alias for `first-fit-decreasing`.
 
 Input should match the output of `du -sh`. Units are case-insensitive and may include an optional `B` or `iB`.
 
