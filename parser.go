@@ -84,13 +84,15 @@ func FormatBytesGB(bytes int64) string {
 }
 
 // ConvertToStructArray converts the list of strings to an array of Entry structs
-func ConvertToStructArray(data []string) ([]Entry, error) {
+func ConvertToStructArray(data []string, nulMode bool) ([]Entry, error) {
 	var result []Entry
 
 	for _, line := range data {
-		// skip purely blank lines
-		if strings.TrimSpace(line) == "" {
-			continue
+		if !nulMode {
+			// skip purely blank lines
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
 		}
 
 		// Find the first whitespace to separate size and name
@@ -104,19 +106,24 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 		remainder := line[idx:]
 		sepLen := 0
 
-		// If the first delimiter character is a tab, consume exactly one tab.
-		// Otherwise (it's a space), consume the contiguous block of spaces.
-		if remainder[0] == '\t' {
+		if nulMode {
+			// In NUL mode, consume exactly one field separator byte (space or tab)
 			sepLen = 1
 		} else {
-			for i, r := range remainder {
-				if r != ' ' {
-					sepLen = i
-					break
+			// If the first delimiter character is a tab, consume exactly one tab.
+			// Otherwise (it's a space), consume the contiguous block of spaces.
+			if remainder[0] == '\t' {
+				sepLen = 1
+			} else {
+				for i, r := range remainder {
+					if r != ' ' {
+						sepLen = i
+						break
+					}
 				}
-			}
-			if sepLen == 0 {
-				sepLen = len(remainder)
+				if sepLen == 0 {
+					sepLen = len(remainder)
+				}
 			}
 		}
 

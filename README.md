@@ -48,6 +48,7 @@ du -sh * | directoryGrouperBySize -maxsize 55G
 | `-f`        | Path to input file. If omitted, data is read from stdin |
 | `-scan`     | Run an internal directory scan on this directory instead of reading input |
 | `-strategy` | Grouping algorithm strategy to use: `first-fit-decreasing` (default) or `next-fit`. |
+| `-0`, `--null` | Read NUL-delimited records instead of newline-delimited, safely preserving filenames containing newlines. |
 
 **Grouping Strategies:**
 By default, the tool uses a **first-fit-decreasing** strategy (an optimized First-Fit Decreasing algorithm implemented via a segment tree for deterministic O(n log n) total time). This reorders your input entries from largest to smallest to minimize the total number of disks and reduce wasted capacity efficiently even on very large directory listings. It is a heuristic and does not guarantee the absolute optimal disk count, but performs well. If preserving the original input order is critical to your use case, use `-strategy next-fit`, which fills disks sequentially in O(n) time. The alias `best-fit` is supported as a legacy compatibility alias for `first-fit-decreasing`.
@@ -119,12 +120,20 @@ go test ./...
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
+### Using NUL-Delimited Input
+The existing line-oriented mode (without `-0` or `--null`) separates entries with newlines. This limits the safe representation of filenames that contain embedded newline characters.
+To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag:
+```bash
+find . -maxdepth 1 -print0 | xargs -0 du -sh -0 | directoryGrouperBySize -maxsize 55G -0
+```
+*(Note: `du -0` requires GNU coreutils)*
+
 ### Limitations
-- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`), `directoryGrouperBySize` relies on line-oriented input, similar to standard utilities like `du`. Therefore, filenames containing newline characters (`\n`) cannot be correctly parsed. Using the `-scan` flag avoids this limitation.
+- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`) without `-0` / `--null`, `directoryGrouperBySize` relies on line-oriented input, similar to standard utilities like `du`. Therefore, filenames containing newline characters (`\n`) cannot be correctly parsed. Using the NUL-delimited flag (`-0` / `--null`) or the `-scan` flag avoids this limitation.
 - **Input Sources**: The `-f` and `-scan` flags are mutually exclusive. Choose only one input source.
 
 ### Scan Semantics
-The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable (especially on Windows). Its deterministic logical-size contract is explicitly defined as:
+The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable (especially on Windows) as part of a separate native-scanning follow-up in #11. Its deterministic logical-size contract is explicitly defined as:
 - **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Regular files contribute their exact logical byte length.
 - **Directories:** Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries.
 - **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. They contribute their platform/filesystem-dependent link metadata size.
