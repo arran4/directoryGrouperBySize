@@ -136,3 +136,33 @@ func ConvertToStructArray(data []string) ([]Entry, error) {
 
 	return result, nil
 }
+
+// ConvertToStructArrayNULMode converts the list of NUL-delimited strings to an array of Entry structs,
+// requiring a strict tab separator between the size and the un-normalized filename.
+func ConvertToStructArrayNULMode(data []string) ([]Entry, error) {
+	var result []Entry
+
+	for _, line := range data {
+		// In NUL mode, the separator must be a tab.
+		idx := strings.IndexByte(line, '\t')
+		if idx == -1 {
+			return nil, fmt.Errorf("invalid input format: missing tab separator in record: %q", line)
+		}
+
+		sizeStr := line[:idx]
+		name := line[idx+1:] // Consume exactly one tab byte
+
+		if sizeStr == "" || name == "" {
+			return nil, fmt.Errorf("invalid input format: empty size or name in record: %q", line)
+		}
+
+		sizeBytes, err := ParseSize(sizeStr, "B")
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, Entry{SizeBytes: sizeBytes, Name: name})
+	}
+
+	return result, nil
+}

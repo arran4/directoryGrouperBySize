@@ -107,7 +107,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-maxsize", "2G"},
 			stdin:       &errorReader{err: errors.New("simulated read error")},
 			expectError: true,
-			errContains: "error reading stdin: simulated read error",
+			errContains: "error reading input: simulated read error",
 		},
 	}
 

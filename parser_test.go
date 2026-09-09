@@ -2,6 +2,7 @@ package directoryGrouperBySize
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,51 @@ func TestConvertToStructArrayInvalid(t *testing.T) {
 		_, err := ConvertToStructArray([]string{tc})
 		if err == nil {
 			t.Errorf("expected error for invalid input: %q", tc)
+		}
+	}
+}
+
+func TestConvertToStructArray_NulMode(t *testing.T) {
+	input := []string{
+		"1G\tfoo",
+		"500M\tbar\nwith\nnewlines",
+		"1G\t  leading spaces preserved",
+		"1G\t\ttabs inside  ", // Note: size\t\tname -> name="\ttabs inside  "
+	}
+	got, err := ConvertToStructArrayNULMode(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("expected 4 items, got %d", len(got))
+	}
+	if got[0].Name != "foo" || got[0].SizeBytes != 1024*1024*1024 {
+		t.Errorf("unexpected first item: %+v", got[0])
+	}
+	expectedSize := int64(500 * 1024 * 1024)
+	if got[1].Name != "bar\nwith\nnewlines" || got[1].SizeBytes != expectedSize {
+		t.Errorf("unexpected second item: %+v", got[1])
+	}
+	if got[2].Name != "  leading spaces preserved" || got[2].SizeBytes != 1024*1024*1024 {
+		t.Errorf("unexpected third item: %+v", got[2])
+	}
+	if got[3].Name != "\ttabs inside  " || got[3].SizeBytes != 1024*1024*1024 {
+		t.Errorf("unexpected fourth item: %+v", got[3])
+	}
+}
+
+func TestConvertToStructArray_NulModeInvalid(t *testing.T) {
+	tests := []string{
+		"invalidline",
+		"1G",
+		"",
+		"2gb baz", // space as separator should fail in NUL mode
+		"1G  space instead of tab",
+	}
+	for _, tc := range tests {
+		_, err := ConvertToStructArrayNULMode([]string{tc})
+		if err == nil {
+			t.Errorf("expected error for invalid nul input: %q", tc)
 		}
 	}
 }
@@ -124,5 +170,29 @@ func TestParseSize_Overflow(t *testing.T) {
 		if err == nil {
 			t.Errorf("expected error for overflow size %s, got nil", tt.in)
 		}
+	}
+}
+
+func TestConvertToStructArray_EmptyFilename(t *testing.T) {
+	input := []string{
+		"1G\t",
+	}
+	_, err := ConvertToStructArrayNULMode(input)
+	if err == nil {
+		t.Fatalf("expected error for empty filename in NUL mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid input format") {
+		t.Errorf("expected 'invalid input format' error, got %v", err)
+	}
+
+	inputLineOriented := []string{
+		"1G\t",
+	}
+	_, err = ConvertToStructArray(inputLineOriented)
+	if err == nil {
+		t.Fatalf("expected error for empty filename in line-oriented mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid input format") {
+		t.Errorf("expected 'invalid input format' error, got %v", err)
 	}
 }

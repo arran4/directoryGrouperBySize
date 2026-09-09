@@ -21,19 +21,27 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 `-strategy`  Grouping algorithm strategy to use. `first-fit-decreasing` (default) reorders input from largest to smallest to efficiently minimize disks using an O(n log n) segment-tree heuristic. `next-fit` preserves the original input sequence sequentially in O(n) time. `best-fit` is supported as a legacy alias for `first-fit-decreasing`.
 
+`-0`, `--null`  Read NUL-delimited records instead of newline-delimited, safely preserving filenames containing newlines.
+
 # EXAMPLE
 
 `directoryGrouperBySize -maxsize 55G -f dirs.txt`
 
 `directoryGrouperBySize -maxsize 55G -scan /media`
 
+`find . -maxdepth 1 -print0 | xargs -0 du -sh -0 | directoryGrouperBySize -maxsize 55G -0`
+
 # SEE ALSO
 
 `du(1)`
 
+### Using NUL-Delimited Input
+The existing line-oriented mode (without `-0` or `--null`) separates entries with newlines. This limits the safe representation of filenames that contain embedded newline characters.
+To parse filenames with embedded newlines, use a NUL-delimited format and pass the `-0` or `--null` flag, like the `du -0` example above. The expected format is `<size>\t<filename>\0`. The first tab character (`\t`) is strictly required as the field separator; every byte after it up to the NUL byte is preserved exactly as the filename, including leading/trailing spaces, additional tabs, and embedded newlines.
+
 ### Limitations
 
-- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`), `directoryGrouperBySize` relies on line-oriented input parsing. Therefore, filenames containing newline characters (`\n`) cannot be reliably parsed. Using the `-scan` flag avoids this limitation.
+- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`) without `-0` / `--null`, `directoryGrouperBySize` relies on line-oriented input parsing. Therefore, filenames containing newline characters (`\n`) cannot be reliably parsed. Using the `-0` / `--null` flag or the `-scan` flag avoids this limitation.
 
 # SCAN SEMANTICS
 
