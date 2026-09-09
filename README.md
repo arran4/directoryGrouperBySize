@@ -124,9 +124,11 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 - **Input Sources**: The `-f` and `-scan` flags are mutually exclusive. Choose only one input source.
 
 ### Scan Semantics
-The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable to guarantee cross-platform reliability (especially on Windows). Its semantics are explicitly defined as:
-- **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries (regular files and symlinks). This guarantees exact deterministic sizing across different filesystems.
-- **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. A symlink's size is counted only as its own link length.
+The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable (especially on Windows). Its deterministic logical-size contract is explicitly defined as:
+- **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Regular files contribute their exact logical byte length.
+- **Directories:** Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries.
+- **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. They contribute their platform/filesystem-dependent link metadata size.
+- **Cross-platform determinism:** Results are deterministic for a given filesystem. Exact byte-for-byte cross-platform equality is guaranteed for directory trees containing purely regular files and directories, but may vary when symlinks or other non-regular entries report platform-dependent metadata sizes.
 - **Hard links:** Hard links are counted individually per directory entry encountered.
 - **Permission errors:** The scan fails cleanly and immediately if it encounters unreadable files or directories. It will not silently omit capacities.
 - **Names:** Preserves exact filenames as provided by the filesystem (including spaces and newlines).
