@@ -28,7 +28,7 @@ go build ./cmd/directoryGrouperBySize
 directoryGrouperBySize -maxsize 55G -f input.txt
 ```
 
-Or let the tool run `du` for you:
+Or let the tool run a scan for you:
 
 ```bash
 directoryGrouperBySize -maxsize 55G -scan /media
@@ -46,7 +46,7 @@ du -sh * | directoryGrouperBySize -maxsize 55G
 |-------------|---------------------------------------------------|
 | `-maxsize`  | Maximum size for each group. Accepts G/GB/GiB, M/MB/MiB etc. Without a suffix GB is assumed. (required)|
 | `-f`        | Path to input file. If omitted, data is read from stdin |
-| `-scan`     | Run `du -sh` on this directory instead of reading input |
+| `-scan`     | Run an internal directory scan on this directory instead of reading input |
 | `-strategy` | Grouping algorithm strategy to use: `first-fit-decreasing` (default) or `next-fit`. |
 
 **Grouping Strategies:**
@@ -120,5 +120,13 @@ go test ./...
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ### Limitations
-- **Filename Line-Oriented Limitations**: `directoryGrouperBySize` relies on line-oriented input, similar to standard utilities like `du`. Therefore, filenames containing newline characters (`\n`) cannot be correctly parsed when using piped input or reading from a file (`-f`).
+- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`), `directoryGrouperBySize` relies on line-oriented input, similar to standard utilities like `du`. Therefore, filenames containing newline characters (`\n`) cannot be correctly parsed. Using the `-scan` flag avoids this limitation.
 - **Input Sources**: The `-f` and `-scan` flags are mutually exclusive. Choose only one input source.
+
+### Scan Semantics
+The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable to guarantee cross-platform reliability (especially on Windows). Its semantics are explicitly defined as:
+- **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage.
+- **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. A symlink's size is counted only as its own link length.
+- **Hard links:** Hard links are counted individually per directory entry encountered.
+- **Permission errors:** The scan fails cleanly and immediately if it encounters unreadable files or directories. It will not silently omit capacities.
+- **Names:** Preserves exact filenames as provided by the filesystem (including spaces and newlines).

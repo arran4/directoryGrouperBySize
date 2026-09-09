@@ -2,13 +2,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/arran4/directoryGrouperBySize"
 )
@@ -20,21 +18,13 @@ var (
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, execCommand); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// execCommand is a variable to allow injection of a mock for testing du.
-var execCommand = func(name string, arg ...string) ([]byte, error) {
-	cmd := exec.Command(name, arg...)
-	return cmd.Output()
-}
-
-type execCmdFunc func(string, ...string) ([]byte, error)
-
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner execCmdFunc) error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("directoryGrouperBySize", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -70,52 +60,46 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner exe
 		return fmt.Errorf("cannot use both -f and -scan flags together")
 	}
 
-	var data []string
+	var entries []directoryGrouperBySize.Entry
 
-	switch {
-	case *scanFlag != "":
-		entries, err := os.ReadDir(*scanFlag)
+	if *scanFlag != "" {
+		var err error
+		entries, err = directoryGrouperBySize.ScanDirectory(context.Background(), *scanFlag)
 		if err != nil {
-			return fmt.Errorf("error reading directory: %v", err)
+			return fmt.Errorf("error scanning directory: %v", err)
 		}
-		for _, e := range entries {
-			path := filepath.Join(*scanFlag, e.Name())
-			out, err := cmdRunner("du", "-sh", path)
+	} else {
+		var data []string
+		if *fileFlag != "" {
+			file, err := os.Open(*fileFlag)
 			if err != nil {
-				return fmt.Errorf("error running du: %v", err)
+				return fmt.Errorf("error opening file: %v", err)
 			}
-			// Only trim newlines, preserving any trailing spaces in the filename
-			trimmedOut := strings.TrimRight(string(out), "\r\n")
-			data = append(data, trimmedOut)
+			defer file.Close()
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				data = append(data, scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("error reading file: %v", err)
+			}
+		} else {
+			// Stdin
+			scanner := bufio.NewScanner(stdin)
+			for scanner.Scan() {
+				data = append(data, scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("error reading stdin: %v", err)
+			}
 		}
-	case *fileFlag != "":
-		file, err := os.Open(*fileFlag)
+
+		var err error
+		entries, err = directoryGrouperBySize.ConvertToStructArray(data)
 		if err != nil {
-			return fmt.Errorf("error opening file: %v", err)
+			return fmt.Errorf("error converting input: %v", err)
 		}
-		defer file.Close()
-
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			data = append(data, scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("error reading file: %v", err)
-		}
-	default:
-		// Stdin
-		scanner := bufio.NewScanner(stdin)
-		for scanner.Scan() {
-			data = append(data, scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("error reading stdin: %v", err)
-		}
-	}
-
-	entries, err := directoryGrouperBySize.ConvertToStructArray(data)
-	if err != nil {
-		return fmt.Errorf("error converting input: %v", err)
 	}
 
 	disks, err := directoryGrouperBySize.GroupWithStrategy(entries, maxSizeBytes, *strategyFlag)

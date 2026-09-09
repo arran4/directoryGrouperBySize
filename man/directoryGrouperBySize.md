@@ -17,7 +17,7 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 `-f`  Path to file to read listing from. If omitted, standard input is used.
 
-`-scan`  Run `du -sh` on the specified directory instead of reading input.
+`-scan`  Run an internal directory scan on the specified directory instead of reading input.
 
 `-strategy`  Grouping algorithm strategy to use. `first-fit-decreasing` (default) reorders input from largest to smallest to efficiently minimize disks using an O(n log n) segment-tree heuristic. `next-fit` preserves the original input sequence sequentially in O(n) time. `best-fit` is supported as a legacy alias for `first-fit-decreasing`.
 
@@ -33,4 +33,14 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 ### Limitations
 
-- **Filename Line-Oriented Limitations**: `directoryGrouperBySize` relies on line-oriented input parsing. Therefore, filenames containing newline characters (`\n`) cannot be reliably parsed through piped input or files (`-f`).
+- **Filename Line-Oriented Limitations**: When using piped input or reading from a file (`-f`), `directoryGrouperBySize` relies on line-oriented input parsing. Therefore, filenames containing newline characters (`\n`) cannot be reliably parsed. Using the `-scan` flag avoids this limitation.
+
+# SCAN SEMANTICS
+
+The `-scan` flag uses an internal Go scanning backend instead of an external `du` command to guarantee exact cross-platform consistency.
+
+*   **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage.
+*   **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. A symlink's size is counted only as its own link length.
+*   **Hard links:** Hard links are counted individually per directory entry encountered.
+*   **Permission errors:** The scan fails cleanly and immediately if it encounters unreadable files or directories.
+*   **Names:** Preserves exact filenames as provided by the filesystem (including spaces and newlines).
