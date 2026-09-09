@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,7 +26,6 @@ func TestRun(t *testing.T) {
 		expectError bool
 		errContains string
 		outContains string
-		cmdRunner   execCmdFunc
 		setupFiles  func(string)
 	}{
 		{
@@ -94,30 +92,12 @@ func TestRun(t *testing.T) {
 			errContains: "error reading directory",
 		},
 		{
-			name:  "Failing du invocation",
-			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir"},
-			stdin: strings.NewReader(""),
-			setupFiles: func(dir string) {
-				os.MkdirAll(filepath.Join(dir, "mock_scan_dir"), 0755)
-				os.WriteFile(filepath.Join(dir, "mock_scan_dir", "a.txt"), []byte("data"), 0644)
-			},
-			cmdRunner: func(name string, arg ...string) ([]byte, error) {
-				return nil, fmt.Errorf("mock du failed")
-			},
-			expectError: true,
-			errContains: "error running du: mock du failed",
-		},
-		{
-			name:  "du filename whitespace preservation",
+			name:  "Filename whitespace preservation",
 			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
 			stdin: strings.NewReader(""),
 			setupFiles: func(dir string) {
 				os.MkdirAll(filepath.Join(dir, "mock_scan_dir_ws"), 0755)
 				os.WriteFile(filepath.Join(dir, "mock_scan_dir_ws", " trailing space "), []byte("data"), 0644)
-			},
-			cmdRunner: func(name string, arg ...string) ([]byte, error) {
-				// Mock returning a size and path with trailing spaces as du does, with newline
-				return []byte("1M\t" + arg[len(arg)-1] + "\n"), nil
 			},
 			expectError: false,
 			outContains: " trailing space \n",
@@ -135,11 +115,6 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
-			runner := execCommand
-			if tc.cmdRunner != nil {
-				runner = tc.cmdRunner
-			}
-
 			// If setup files needed for scan, we run in a tmp dir
 			var args []string
 			args = append(args, tc.args...)
@@ -156,7 +131,7 @@ func TestRun(t *testing.T) {
 				}
 			}
 
-			err := run(args, tc.stdin, &stdout, &stderr, runner)
+			err := run(args, tc.stdin, &stdout, &stderr)
 
 			if tc.expectError {
 				if err == nil {
@@ -183,7 +158,7 @@ func TestRun_DefaultStrategy(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{"-maxsize", "10G"}
 
-	err := run(args, stdin, &stdout, &stderr, nil)
+	err := run(args, stdin, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -206,7 +181,7 @@ func TestRun_NextFitStrategy(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{"-maxsize", "10G", "-strategy", "next-fit"}
 
-	err := run(args, stdin, &stdout, &stderr, nil)
+	err := run(args, stdin, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +203,7 @@ func TestRun_ExplicitFFDStrategy(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{"-maxsize", "10G", "-strategy", "first-fit-decreasing"}
 
-	err := run(args, stdin, &stdout, &stderr, nil)
+	err := run(args, stdin, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -245,7 +220,7 @@ func TestRun_UnknownStrategy(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{"-maxsize", "10G", "-strategy", "bad-strategy"}
 
-	err := run(args, stdin, &stdout, &stderr, nil)
+	err := run(args, stdin, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error for unknown strategy")
 	}
