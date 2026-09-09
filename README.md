@@ -125,7 +125,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ### Scan Semantics
 The `-scan` flag uses an internal Go scanning backend, dropping the previous dependency on an external `du` executable to guarantee cross-platform reliability (especially on Windows). Its semantics are explicitly defined as:
-- **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage.
+- **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries (regular files and symlinks). This guarantees exact deterministic sizing across different filesystems.
 - **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. A symlink's size is counted only as its own link length.
 - **Hard links:** Hard links are counted individually per directory entry encountered.
 - **Permission errors:** The scan fails cleanly and immediately if it encounters unreadable files or directories. It will not silently omit capacities.

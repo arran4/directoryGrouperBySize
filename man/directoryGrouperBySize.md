@@ -37,9 +37,9 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 # SCAN SEMANTICS
 
-The `-scan` flag uses an internal Go scanning backend instead of an external `du` command to guarantee exact cross-platform consistency.
+The `-scan` flag uses an internal Go scanning backend instead of an external `du` command.
 
-*   **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage.
+*   **Size calculation:** Uses logical/apparent file sizes (bytes), not allocated filesystem block usage. Directory metadata sizes are excluded; a directory's size is the exact recursive sum of its non-directory entries (regular files and symlinks). This deterministic logical-size contract guarantees consistent behavior regardless of the underlying filesystem.
 *   **Symlinks:** Symlinks are not followed either inside or outside the hierarchy. A symlink's size is counted only as its own link length.
 *   **Hard links:** Hard links are counted individually per directory entry encountered.
 *   **Permission errors:** The scan fails cleanly and immediately if it encounters unreadable files or directories.

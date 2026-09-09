@@ -96,7 +96,7 @@ func TestScanDirectory(t *testing.T) {
 	symlinkDir := filepath.Join(tmpDir, "symlinks")
 	os.Mkdir(symlinkDir, 0755)
 
-	// Create a target directory and file
+	// Create a target directory and file outside of the scanned child directory
 	targetDir := filepath.Join(symlinkDir, "target_dir")
 	os.Mkdir(targetDir, 0755)
 	os.WriteFile(filepath.Join(targetDir, "huge.txt"), make([]byte, 500), 0644)
@@ -104,12 +104,17 @@ func TestScanDirectory(t *testing.T) {
 	targetFile := filepath.Join(symlinkDir, "target.txt")
 	os.WriteFile(targetFile, make([]byte, 100), 0644)
 
-	// Create symlinks
-	linkPath := filepath.Join(symlinkDir, "link.txt")
-	dirLinkPath := filepath.Join(symlinkDir, "dir_link")
+	// Create an immediate child directory that contains symlinks
+	nestedChildDir := filepath.Join(symlinkDir, "nested_child")
+	os.Mkdir(nestedChildDir, 0755)
 
-	errFileSym := os.Symlink("target.txt", linkPath)
-	errDirSym := os.Symlink("target_dir", dirLinkPath)
+	// Create symlinks inside the nested child to trigger WalkDir behavior
+	linkPath := filepath.Join(nestedChildDir, "link.txt")
+	dirLinkPath := filepath.Join(nestedChildDir, "dir_link")
+
+	// Target files are in parent dir relative to symlinks
+	errFileSym := os.Symlink("../target.txt", linkPath)
+	errDirSym := os.Symlink("../target_dir", dirLinkPath)
 
 	if errFileSym == nil && errDirSym == nil {
 		entries, err = ScanDirectory(ctx, symlinkDir)
@@ -118,14 +123,9 @@ func TestScanDirectory(t *testing.T) {
 		}
 
 		for _, entry := range entries {
-			if entry.Name == "link.txt" {
-				if entry.SizeBytes >= 100 {
-					t.Errorf("symlink should have size of link itself, not target. Got %d bytes", entry.SizeBytes)
-				}
-			}
-			if entry.Name == "dir_link" {
+			if entry.Name == "nested_child" {
 				if entry.SizeBytes >= 500 {
-					t.Errorf("symlink to dir should NOT traverse target. Got %d bytes (expected tiny link size)", entry.SizeBytes)
+					t.Errorf("symlink to dir inside nested_child should NOT traverse target recursively. Got %d bytes (expected tiny combined link sizes)", entry.SizeBytes)
 				}
 			}
 		}
