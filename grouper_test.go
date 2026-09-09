@@ -159,7 +159,7 @@ func TestGroup_OverflowSafe(t *testing.T) {
 }
 
 func TestGroup_NextFitVsBestFit(t *testing.T) {
-	// A scenario where next-fit performs worse than best-fit.
+	// A scenario where next-fit performs worse than best-fit (now first-fit-decreasing).
 	// Sizes: 6, 5, 4, 3, 2, capacity: 10
 	entries := []Entry{
 		{SizeBytes: 6, Name: "A"},
@@ -182,7 +182,7 @@ func TestGroup_NextFitVsBestFit(t *testing.T) {
 		t.Fatalf("expected 3 disks for next-fit, got %d", len(nextFitDisks))
 	}
 
-	// Best-fit:
+	// First-fit-decreasing:
 	// Sorted: 6, 5, 4, 3, 2
 	// A(6) -> Disk 1 (rem 4)
 	// B(5) -> Disk 2 (rem 5)
@@ -280,5 +280,37 @@ func TestGroup_BestFitExactAndNearCapacity(t *testing.T) {
 	}
 	if len(disks[1]) != 2 || disks[1][0].Name != "NearHalf" || disks[1][1].Name != "One" {
 		t.Errorf("Disk 2 incorrect")
+	}
+}
+
+func TestGroup_FFD_LargeSynthetic(t *testing.T) {
+	// Let's create a large synthetic test to ensure it performs well and correctly.
+	const numEntries = 100000
+	const maxSizeBytes = 100
+
+	entries := make([]Entry, numEntries)
+	for i := 0; i < numEntries; i++ {
+		// Values from 1 to 99
+		entries[i] = Entry{SizeBytes: int64(1 + (i % 99)), Name: "Synthetic"}
+	}
+
+	disks, err := GroupWithStrategy(entries, maxSizeBytes, "first-fit-decreasing")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(disks) == 0 {
+		t.Fatal("expected disks, got 0")
+	}
+
+	// verify all disks are within capacity
+	for i, disk := range disks {
+		var sum int64
+		for _, e := range disk {
+			sum += e.SizeBytes
+		}
+		if sum > maxSizeBytes {
+			t.Fatalf("disk %d exceeded max capacity: %d > %d", i, sum, maxSizeBytes)
+		}
 	}
 }

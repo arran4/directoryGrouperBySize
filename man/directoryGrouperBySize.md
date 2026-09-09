@@ -19,8 +19,6 @@ directoryGrouperBySize - group directory listings into disks of a target size
 
 `-scan`  Run `du -sh` on the specified directory instead of reading input.
 
-`-strategy`  Grouping algorithm strategy to use: `best-fit` (default, reorders inputs for optimal bin packing) or `next-fit` (preserves original input order).
-
 # EXAMPLE
 
 `directoryGrouperBySize -maxsize 55G -f dirs.txt`
