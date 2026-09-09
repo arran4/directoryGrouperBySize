@@ -41,7 +41,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, cmdRunner exe
 	versionFlag := fs.Bool("version", false, "Print version information and exit")
 	fileFlag := fs.String("f", "", "File to read data from")
 	scanFlag := fs.String("scan", "", "Directory to scan with du -sh")
-	strategyFlag := fs.String("strategy", "best-fit", "Grouping algorithm strategy to use: best-fit (default, reorders for optimization) or next-fit (preserves input order)")
+	strategyFlag := fs.String("strategy", "first-fit-decreasing", "Grouping algorithm strategy to use: first-fit-decreasing (default, reorders inputs for efficient bin packing) or next-fit (preserves original input order)")
 
 	var maxSizeBytes int64
 	fs.Func("maxsize", "Maximum size per disk with optional unit suffix (default GB)", func(s string) error {

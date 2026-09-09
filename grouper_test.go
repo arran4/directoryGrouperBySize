@@ -190,12 +190,12 @@ func TestGroup_NextFitVsBestFit(t *testing.T) {
 	// D(3) -> fits in Disk 2 (rem 5) -> Disk 2 (rem 2)
 	// E(2) -> fits in Disk 2 (rem 2) perfectly -> Disk 2 (rem 0)
 	// Total 2 disks
-	bestFitDisks, err := GroupWithStrategy(entries, 10, "best-fit")
+	bestFitDisks, err := GroupWithStrategy(entries, 10, "first-fit-decreasing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(bestFitDisks) != 2 {
-		t.Fatalf("expected 2 disks for best-fit, got %d", len(bestFitDisks))
+		t.Fatalf("expected 2 disks for first-fit-decreasing, got %d", len(bestFitDisks))
 	}
 
 	// Also test Group default behavior
@@ -204,11 +204,11 @@ func TestGroup_NextFitVsBestFit(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(defaultDisks) != 2 {
-		t.Fatalf("expected default Group to use best-fit and return 2 disks, got %d", len(defaultDisks))
+		t.Fatalf("expected default Group to use first-fit-decreasing and return 2 disks, got %d", len(defaultDisks))
 	}
 }
 
-func TestGroup_BestFitDeterministicEqualSizes(t *testing.T) {
+func TestGroup_FFDDeterministicEqualSizes(t *testing.T) {
 	// Duplicated equal-sized entries should be placed deterministically.
 	entries := []Entry{
 		{SizeBytes: 5, Name: "A1"},
@@ -216,7 +216,7 @@ func TestGroup_BestFitDeterministicEqualSizes(t *testing.T) {
 		{SizeBytes: 5, Name: "A3"},
 	}
 
-	disks, err := GroupWithStrategy(entries, 6, "best-fit")
+	disks, err := GroupWithStrategy(entries, 6, "first-fit-decreasing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -238,12 +238,12 @@ func TestGroup_ZeroAndSmallSizes(t *testing.T) {
 		{SizeBytes: 0, Name: "Zero2"},
 	}
 
-	disks, err := GroupWithStrategy(entries, 2, "best-fit")
+	disks, err := GroupWithStrategy(entries, 2, "first-fit-decreasing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// BFD sorts descending, so 1 comes first, then the zeros.
+	// FFD sorts descending, so 1 comes first, then the zeros.
 	if len(disks) != 1 {
 		t.Fatalf("expected 1 disk, got %d", len(disks))
 	}
@@ -256,18 +256,18 @@ func TestGroup_ZeroAndSmallSizes(t *testing.T) {
 	}
 }
 
-func TestGroup_BestFitExactAndNearCapacity(t *testing.T) {
+func TestGroup_FFDExactAndNearCapacity(t *testing.T) {
 	entries := []Entry{
 		{SizeBytes: 5, Name: "Half"},
 		{SizeBytes: 4, Name: "NearHalf"},
 		{SizeBytes: 1, Name: "One"},
 	}
 	// Capacity 5
-	// Best-fit sorted: Half(5), NearHalf(4), One(1)
+	// FFD sorted: Half(5), NearHalf(4), One(1)
 	// Half -> Disk 1 (rem 0)
 	// NearHalf -> Disk 2 (rem 1)
 	// One -> fits in Disk 2 (rem 0)
-	disks, err := GroupWithStrategy(entries, 5, "best-fit")
+	disks, err := GroupWithStrategy(entries, 5, "first-fit-decreasing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

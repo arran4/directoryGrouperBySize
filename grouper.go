@@ -7,18 +7,18 @@ import (
 )
 
 // Group partitions entries into disks, ensuring no disk exceeds maxSizeBytes.
-// Uses the best-fit strategy by default to optimize disk usage.
+// Uses the first-fit-decreasing strategy by default to optimize disk usage.
 // Returns an error if any entry exceeds maxSizeBytes.
 // If multiple entries are oversized, it collects and reports all of them.
 func Group(entries []Entry, maxSizeBytes int64) ([][]Entry, error) {
-	return GroupWithStrategy(entries, maxSizeBytes, "best-fit")
+	return GroupWithStrategy(entries, maxSizeBytes, "first-fit-decreasing")
 }
 
 // GroupWithStrategy partitions entries according to the specified strategy.
 // Supported strategies:
 // - "next-fit": preserves input order, creates a new disk when current fills up.
-// - "best-fit": alias for first-fit-decreasing, reorders entries to optimize space.
 // - "first-fit-decreasing": sorts entries descending, places each in the first disk that fits it efficiently.
+// - "best-fit": legacy alias for first-fit-decreasing.
 func GroupWithStrategy(entries []Entry, maxSizeBytes int64, strategy string) ([][]Entry, error) {
 	var oversized []string
 	for _, entry := range entries {
