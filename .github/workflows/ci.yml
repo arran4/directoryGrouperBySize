@@ -14,7 +14,7 @@ on:
     inputs:
       mode:
         type: choice
-        default: lint-fix
+        default: build
         options: [lint-fix, build, release-major, release-minor, release-patch, release-test, release-rc, release-alpha, monthly-maintenance, publish-tag]
       release_version_override:
         type: string
@@ -30,8 +30,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v') }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.mode || 'default' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v') && inputs.mode != 'publish-tag' && !startsWith(inputs.mode, 'release-') }}
 
 jobs:
   route:
@@ -66,13 +66,15 @@ jobs:
              run_build=true
              run_autofix=false
           elif [[ "$EVENT_NAME" == "schedule" ]]; then
-             run_maintenance=true
-             run_autofix=true
+             if [[ "${{ github.event.schedule }}" == "17 3 1 * *" ]]; then
+                 run_maintenance=true
+             elif [[ "${{ github.event.schedule }}" == "41 2 * * *" ]]; then
+                 run_autofix=true
+             fi
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             mode="$INPUT_MODE"
             if [[ "$mode" == "lint-fix" ]]; then
                run_autofix=true
-               run_build=false
             elif [[ "$mode" == "build" ]]; then
                run_build=true
             elif [[ "$mode" == "publish-tag" ]]; then
