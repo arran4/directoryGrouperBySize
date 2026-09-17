@@ -30,7 +30,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	versionFlag := fs.Bool("version", false, "Print version information and exit")
 	fileFlag := fs.String("f", "", "File to read data from")
-	scanFlag := fs.String("scan", "", "Directory to scan with du -sh")
+	scanFlag := fs.String("scan", "", "Directory to scan internally (logical/apparent byte sizes)")
 	strategyFlag := fs.String("strategy", "first-fit-decreasing", "Grouping algorithm strategy to use: first-fit-decreasing (default, reorders inputs for efficient bin packing) or next-fit (preserves original input order)")
 	nulFlag0 := fs.Bool("0", false, "Read NUL-delimited records instead of newline-delimited (for filenames with newlines)")
 	nulFlagNull := fs.Bool("null", false, "Read NUL-delimited records instead of newline-delimited (for filenames with newlines)")

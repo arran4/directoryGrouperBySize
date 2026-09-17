@@ -215,6 +215,27 @@ func TestRun_ExplicitFFDStrategy(t *testing.T) {
 	}
 }
 
+func TestHelpMessage(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	args := []string{"-h"}
+
+	// Flag package returns flag.ErrHelp on -h, which is an error but handled normally for help text.
+	err := run(args, strings.NewReader(""), &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error (flag.ErrHelp) when invoking -h, got nil")
+	}
+
+	// flag package output is typically directed to stderr
+	out := stderr.String()
+
+	if !strings.Contains(out, "Directory to scan internally") {
+		t.Errorf("expected help message to contain 'Directory to scan internally', got:\n%s", out)
+	}
+	if strings.Contains(out, "du -sh") {
+		t.Errorf("expected help message NOT to contain 'du -sh', but it did:\n%s", out)
+	}
+}
+
 func TestRun_UnknownStrategy(t *testing.T) {
 	stdin := strings.NewReader("6G A\n")
 	var stdout, stderr bytes.Buffer
