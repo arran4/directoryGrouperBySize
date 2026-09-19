@@ -121,15 +121,27 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
-      - name: Run latest golangci-lint
-        uses: golangci/golangci-lint-action@v9.3.0
-        with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
       - name: Verify cross-platform builds
         run: |
           GOOS=linux go build -o /dev/null ./...
           GOOS=windows go build -o /dev/null ./...
           GOOS=darwin go build -o /dev/null ./...
+
+  lint:
+    name: Lint
+    needs: [route]
+    if: ${{ needs.route.outputs.run_code_checks == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run latest golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
 
   maintenance:
     name: Monthly Maintenance
@@ -184,8 +196,8 @@ jobs:
 
   build:
     name: Build Artifacts
-    needs: [route, validation]
-    if: ${{ always() && needs.route.outputs.run_build == 'true' && (needs.validation.result == 'success' || needs.validation.result == 'skipped') }}
+    needs: [route, validation, lint]
+    if: ${{ always() && needs.route.outputs.run_build == 'true' && (needs.validation.result == 'success' || needs.validation.result == 'skipped') && (needs.lint.result == 'success' || needs.lint.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -201,7 +213,7 @@ jobs:
 
   release-ready:
     name: Release Quality Gates Passed
-    needs: [route, validation, build]
+    needs: [route, validation, lint, build]
     if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
