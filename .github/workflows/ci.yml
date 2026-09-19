@@ -2,6 +2,9 @@
 # https://arran4.github.io/blog/post/2026/043-canonical-github-actions-ci-cd-super-reference/
 name: CI/CD
 
+env:
+  GOLANGCI_LINT_VERSION: latest
+
 on:
   push:
     branches: [main]
@@ -118,6 +121,10 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
+      - name: Run latest golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
       - name: Verify cross-platform builds
         run: |
           GOOS=linux go build -o /dev/null ./...
@@ -161,8 +168,11 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go fmt ./...
-      - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
-      - run: golangci-lint run --fix
+      - name: Run latest golangci-lint autofix
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --fix
       - name: Create Pull Request
         if: ${{ github.event_name == 'schedule' || inputs.allow_prs != false }}
         uses: peter-evans/create-pull-request@v7
