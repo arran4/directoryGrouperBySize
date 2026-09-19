@@ -24,13 +24,13 @@ func main() {
 	}
 }
 
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (retErr error) {
 	fs := flag.NewFlagSet("directoryGrouperBySize", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
 	versionFlag := fs.Bool("version", false, "Print version information and exit")
 	fileFlag := fs.String("f", "", "File to read data from")
-	scanFlag := fs.String("scan", "", "Directory to scan with du -sh")
+	scanFlag := fs.String("scan", "", "Directory to scan internally (logical/apparent byte sizes)")
 	strategyFlag := fs.String("strategy", "first-fit-decreasing", "Grouping algorithm strategy to use: first-fit-decreasing (default, reorders inputs for efficient bin packing) or next-fit (preserves original input order)")
 	nulFlag0 := fs.Bool("0", false, "Read NUL-delimited records instead of newline-delimited (for filenames with newlines)")
 	nulFlagNull := fs.Bool("null", false, "Read NUL-delimited records instead of newline-delimited (for filenames with newlines)")
@@ -50,7 +50,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 
 	if *versionFlag {
-		fmt.Fprintf(stdout, "directoryGrouperBySize %s\nCommit: %s\nDate: %s\n", version, commit, date)
+		if _, err := fmt.Fprintf(stdout, "directoryGrouperBySize %s\nCommit: %s\nDate: %s\n", version, commit, date); err != nil {
+			return fmt.Errorf("error writing version output: %w", err)
+		}
 		return nil
 	}
 
@@ -80,7 +82,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			if err != nil {
 				return fmt.Errorf("error opening file: %v", err)
 			}
-			defer file.Close()
+			defer func() {
+				if err := file.Close(); err != nil && retErr == nil {
+					retErr = fmt.Errorf("error closing input file: %w", err)
+				}
+			}()
 			reader = file
 		} else {
 			reader = stdin
@@ -135,11 +141,17 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 		usedGB := float64(diskSizeBytes) / (1024 * 1024 * 1024)
 		freeGB := float64(maxSizeBytes-diskSizeBytes) / (1024 * 1024 * 1024)
-		fmt.Fprintf(stdout, "## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, usedGB, freeGB)
-		for _, entry := range disk {
-			fmt.Fprintf(stdout, "%s\n", entry.Name)
+		if _, err := fmt.Fprintf(stdout, "## Disk %d (%.2f GB used, %.2f GB free)\n", i+1, usedGB, freeGB); err != nil {
+			return fmt.Errorf("error writing disk header: %w", err)
 		}
-		fmt.Fprintln(stdout)
+		for _, entry := range disk {
+			if _, err := fmt.Fprintf(stdout, "%s\n", entry.Name); err != nil {
+				return fmt.Errorf("error writing entry: %w", err)
+			}
+		}
+		if _, err := fmt.Fprintln(stdout); err != nil {
+			return fmt.Errorf("error writing disk separator: %w", err)
+		}
 	}
 
 	return nil

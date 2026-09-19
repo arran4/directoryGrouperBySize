@@ -7,18 +7,36 @@ import (
 	"testing"
 )
 
-func TestScanDirectory(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "scanner_test_*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
+func mustMkdir(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.Mkdir(path, perm); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
 	}
-	defer os.RemoveAll(tmpDir)
+}
+
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatalf("mkdir -p %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestScanDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	var err error
 
 	ctx := context.Background()
 
 	// 1. Empty root
 	emptyDir := filepath.Join(tmpDir, "empty")
-	os.Mkdir(emptyDir, 0755)
+	mustMkdir(t, emptyDir, 0755)
 	entries, err := ScanDirectory(ctx, emptyDir)
 	if err != nil {
 		t.Errorf("expected no error for empty dir, got %v", err)
@@ -29,13 +47,13 @@ func TestScanDirectory(t *testing.T) {
 
 	// 2. Immediate files, unusual characters
 	filesDir := filepath.Join(tmpDir, "files")
-	os.Mkdir(filesDir, 0755)
+	mustMkdir(t, filesDir, 0755)
 	fileNames := []string{"a.txt", " spaces and \n newlines.txt", "c.dat"}
 	fileSizes := []int64{10, 20, 30}
 	for i, name := range fileNames {
 		path := filepath.Join(filesDir, name)
 		data := make([]byte, fileSizes[i])
-		os.WriteFile(path, data, 0644)
+		mustWriteFile(t, path, data, 0644)
 	}
 
 	entries, err = ScanDirectory(ctx, filesDir)
@@ -60,14 +78,14 @@ func TestScanDirectory(t *testing.T) {
 
 	// 3. Nested directories
 	nestedDir := filepath.Join(tmpDir, "nested")
-	os.MkdirAll(filepath.Join(nestedDir, "sub1", "sub2"), 0755)
+	mustMkdirAll(t, filepath.Join(nestedDir, "sub1", "sub2"), 0755)
 
 	// Add file in sub1: 15 bytes
-	os.WriteFile(filepath.Join(nestedDir, "sub1", "file1.txt"), make([]byte, 15), 0644)
+	mustWriteFile(t, filepath.Join(nestedDir, "sub1", "file1.txt"), make([]byte, 15), 0644)
 	// Add file in sub2: 25 bytes
-	os.WriteFile(filepath.Join(nestedDir, "sub1", "sub2", "file2.txt"), make([]byte, 25), 0644)
+	mustWriteFile(t, filepath.Join(nestedDir, "sub1", "sub2", "file2.txt"), make([]byte, 25), 0644)
 	// Add file in nestedDir (immediate): 5 bytes
-	os.WriteFile(filepath.Join(nestedDir, "file3.txt"), make([]byte, 5), 0644)
+	mustWriteFile(t, filepath.Join(nestedDir, "file3.txt"), make([]byte, 5), 0644)
 
 	entries, err = ScanDirectory(ctx, nestedDir)
 	if err != nil {
@@ -78,35 +96,36 @@ func TestScanDirectory(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if entry.Name == "file3.txt" {
+		switch entry.Name {
+		case "file3.txt":
 			if entry.SizeBytes != 5 {
 				t.Errorf("expected 5 bytes for file3.txt, got %d", entry.SizeBytes)
 			}
-		} else if entry.Name == "sub1" {
+		case "sub1":
 			// Expected logical size is precisely the sum of non-directory files inside.
 			if entry.SizeBytes != 40 {
 				t.Errorf("expected exactly 40 bytes for sub1, got %d", entry.SizeBytes)
 			}
-		} else {
+		default:
 			t.Errorf("unexpected entry %q", entry.Name)
 		}
 	}
 
 	// 4. Symlink semantics (Immediate and Nested)
 	symlinkDir := filepath.Join(tmpDir, "symlinks")
-	os.Mkdir(symlinkDir, 0755)
+	mustMkdir(t, symlinkDir, 0755)
 
 	// Create a target directory and file outside of the scanned child directory
 	targetDir := filepath.Join(symlinkDir, "target_dir")
-	os.Mkdir(targetDir, 0755)
-	os.WriteFile(filepath.Join(targetDir, "huge.txt"), make([]byte, 500), 0644)
+	mustMkdir(t, targetDir, 0755)
+	mustWriteFile(t, filepath.Join(targetDir, "huge.txt"), make([]byte, 500), 0644)
 
 	targetFile := filepath.Join(symlinkDir, "target.txt")
-	os.WriteFile(targetFile, make([]byte, 100), 0644)
+	mustWriteFile(t, targetFile, make([]byte, 100), 0644)
 
 	// Create an immediate child directory that contains symlinks
 	nestedChildDir := filepath.Join(symlinkDir, "nested_child")
-	os.Mkdir(nestedChildDir, 0755)
+	mustMkdir(t, nestedChildDir, 0755)
 
 	// Create symlinks inside the nested child to trigger WalkDir behavior
 	linkPath := filepath.Join(nestedChildDir, "link.txt")
@@ -135,9 +154,9 @@ func TestScanDirectory(t *testing.T) {
 
 	// 5. Unreadable directory (permission error)
 	unreadableDir := filepath.Join(tmpDir, "unreadable")
-	os.Mkdir(unreadableDir, 0755)
+	mustMkdir(t, unreadableDir, 0755)
 	subUnreadable := filepath.Join(unreadableDir, "sub")
-	os.Mkdir(subUnreadable, 0000) // remove permissions
+	mustMkdir(t, subUnreadable, 0000) // remove permissions
 
 	// Verify if environment actually honors 0000
 	_, verifyErr := os.ReadDir(subUnreadable)
@@ -151,13 +170,15 @@ func TestScanDirectory(t *testing.T) {
 		t.Logf("Skipping strict permission error test. Environment (e.g. Windows/Root) does not restrict reading dir with 0000 perms.")
 	}
 
-	// restore permissions so os.RemoveAll can clean it up later
-	os.Chmod(subUnreadable, 0755)
+	// Restore permissions so the temporary directory cleanup can remove it later.
+	if err := os.Chmod(subUnreadable, 0755); err != nil {
+		t.Fatalf("restore permissions on unreadable directory: %v", err)
+	}
 
 	// 6. Context cancellation
 	cancelDir := filepath.Join(tmpDir, "cancel")
-	os.Mkdir(cancelDir, 0755)
-	os.WriteFile(filepath.Join(cancelDir, "a.txt"), make([]byte, 10), 0644)
+	mustMkdir(t, cancelDir, 0755)
+	mustWriteFile(t, filepath.Join(cancelDir, "a.txt"), make([]byte, 10), 0644)
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
@@ -169,7 +190,7 @@ func TestScanDirectory(t *testing.T) {
 
 	// 7. Large file
 	largeDir := filepath.Join(tmpDir, "large")
-	os.Mkdir(largeDir, 0755)
+	mustMkdir(t, largeDir, 0755)
 	largeFile := filepath.Join(largeDir, "large.dat")
 
 	// create a sparse file (or just write a few bytes at a large offset)
@@ -182,8 +203,16 @@ func TestScanDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to seek: %v", err)
 	}
-	f.Write([]byte{1})
-	f.Close()
+	if _, err := f.Write([]byte{1}); err != nil {
+		closeErr := f.Close()
+		if closeErr != nil {
+			t.Errorf("close large file after write failure: %v", closeErr)
+		}
+		t.Fatalf("failed to write sparse file tail byte: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("failed to close large file: %v", err)
+	}
 
 	entries, err = ScanDirectory(ctx, largeDir)
 	if err != nil {

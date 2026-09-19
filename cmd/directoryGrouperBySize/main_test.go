@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func TestRun(t *testing.T) {
 		expectError bool
 		errContains string
 		outContains string
-		setupFiles  func(string)
+		setupFiles  func(*testing.T, string)
 	}{
 		{
 			name:        "Missing maxsize",
@@ -95,9 +96,15 @@ func TestRun(t *testing.T) {
 			name:  "Filename whitespace preservation",
 			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
 			stdin: strings.NewReader(""),
-			setupFiles: func(dir string) {
-				os.MkdirAll(filepath.Join(dir, "mock_scan_dir_ws"), 0755)
-				os.WriteFile(filepath.Join(dir, "mock_scan_dir_ws", " trailing space "), []byte("data"), 0644)
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				scanDir := filepath.Join(dir, "mock_scan_dir_ws")
+				if err := os.MkdirAll(scanDir, 0755); err != nil {
+					t.Fatalf("create scan dir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(scanDir, " trailing space "), []byte("data"), 0644); err != nil {
+					t.Fatalf("write scan fixture: %v", err)
+				}
 			},
 			expectError: false,
 			outContains: " trailing space \n",
@@ -119,9 +126,8 @@ func TestRun(t *testing.T) {
 			var args []string
 			args = append(args, tc.args...)
 			if tc.setupFiles != nil {
-				tmpDir, _ := os.MkdirTemp("", "grouper_test")
-				defer os.RemoveAll(tmpDir)
-				tc.setupFiles(tmpDir)
+				tmpDir := t.TempDir()
+				tc.setupFiles(t, tmpDir)
 
 				// Fix args with tmpdir
 				for i, a := range args {
@@ -212,6 +218,23 @@ func TestRun_ExplicitFFDStrategy(t *testing.T) {
 	// same as default
 	if !strings.Contains(out, "Disk 2") || strings.Contains(out, "Disk 3") {
 		t.Errorf("expected 2 disks, got: %s", out)
+	}
+}
+
+func TestHelpMessage(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected flag.ErrHelp when invoking -h, got %v", err)
+	}
+
+	out := stderr.String()
+	if !strings.Contains(out, "Directory to scan internally") {
+		t.Errorf("expected help message to describe the internal scanner, got:\n%s", out)
+	}
+	if strings.Contains(out, "du -sh") {
+		t.Errorf("expected help message not to mention du -sh, got:\n%s", out)
 	}
 }
 
