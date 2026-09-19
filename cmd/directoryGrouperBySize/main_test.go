@@ -27,7 +27,7 @@ func TestRun(t *testing.T) {
 		expectError bool
 		errContains string
 		outContains string
-		setupFiles  func(string)
+		setupFiles  func(*testing.T, string)
 	}{
 		{
 			name:        "Missing maxsize",
@@ -96,9 +96,15 @@ func TestRun(t *testing.T) {
 			name:  "Filename whitespace preservation",
 			args:  []string{"-maxsize", "2G", "-scan", "mock_scan_dir_ws"},
 			stdin: strings.NewReader(""),
-			setupFiles: func(dir string) {
-				os.MkdirAll(filepath.Join(dir, "mock_scan_dir_ws"), 0755)
-				os.WriteFile(filepath.Join(dir, "mock_scan_dir_ws", " trailing space "), []byte("data"), 0644)
+			setupFiles: func(t *testing.T, dir string) {
+				t.Helper()
+				scanDir := filepath.Join(dir, "mock_scan_dir_ws")
+				if err := os.MkdirAll(scanDir, 0755); err != nil {
+					t.Fatalf("create scan dir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(scanDir, " trailing space "), []byte("data"), 0644); err != nil {
+					t.Fatalf("write scan fixture: %v", err)
+				}
 			},
 			expectError: false,
 			outContains: " trailing space \n",
@@ -120,9 +126,8 @@ func TestRun(t *testing.T) {
 			var args []string
 			args = append(args, tc.args...)
 			if tc.setupFiles != nil {
-				tmpDir, _ := os.MkdirTemp("", "grouper_test")
-				defer os.RemoveAll(tmpDir)
-				tc.setupFiles(tmpDir)
+				tmpDir := t.TempDir()
+				tc.setupFiles(t, tmpDir)
 
 				// Fix args with tmpdir
 				for i, a := range args {
