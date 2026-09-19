@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -212,6 +213,23 @@ func TestRun_ExplicitFFDStrategy(t *testing.T) {
 	// same as default
 	if !strings.Contains(out, "Disk 2") || strings.Contains(out, "Disk 3") {
 		t.Errorf("expected 2 disks, got: %s", out)
+	}
+}
+
+func TestHelpMessage(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected flag.ErrHelp when invoking -h, got %v", err)
+	}
+
+	out := stderr.String()
+	if !strings.Contains(out, "Directory to scan internally") {
+		t.Errorf("expected help message to describe the internal scanner, got:\n%s", out)
+	}
+	if strings.Contains(out, "du -sh") {
+		t.Errorf("expected help message not to mention du -sh, got:\n%s", out)
 	}
 }
 
