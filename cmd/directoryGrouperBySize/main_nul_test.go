@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -73,23 +74,15 @@ func TestRun_NulMode(t *testing.T) {
 }
 
 func TestRun_NulMode_File(t *testing.T) {
-	// create a temp file
-	tempFile, err := os.CreateTemp("", "nul_test_*.txt")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
+	tempFile := filepath.Join(t.TempDir(), "nul-input.txt")
+	if err := os.WriteFile(tempFile, []byte("1G\tfile1\nwith\nnewlines\x002G\tfile2\x00"), 0600); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
-
-	_, err = tempFile.WriteString("1G\tfile1\nwith\nnewlines\x002G\tfile2\x00")
-	if err != nil {
-		t.Fatalf("failed to write to temp file: %v", err)
-	}
-	tempFile.Close()
 
 	var outBuf, errBuf bytes.Buffer
 	stdinBuf := strings.NewReader("") // Stdin should not be read
 
-	err = run([]string{"-maxsize", "10G", "-0", "-f", tempFile.Name()}, stdinBuf, &outBuf, &errBuf)
+	err := run([]string{"-maxsize", "10G", "-0", "-f", tempFile}, stdinBuf, &outBuf, &errBuf)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
