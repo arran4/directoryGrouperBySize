@@ -147,9 +147,21 @@ func TestWorkflowRouting(t *testing.T) {
 		},
 		{
 			name:     "Explicit publish-tag dispatch",
-			needs:    map[string]string{"validation": "skipped", "lint": "skipped", "build": "skipped"},
-			outputs:  map[string]string{"run_code_checks": "false", "run_build": "false", "run_release": "false", "run_publisher": "true"},
+			needs:    map[string]string{"validation": "success", "lint": "success", "build": "success"},
+			outputs:  map[string]string{"run_code_checks": "true", "run_build": "true", "run_release": "false", "run_publisher": "true"},
 			expected: true,
+		},
+		{
+			name:     "Explicit publish-tag dispatch failure validation",
+			needs:    map[string]string{"validation": "failure", "lint": "success", "build": "success"},
+			outputs:  map[string]string{"run_code_checks": "true", "run_build": "true", "run_release": "false", "run_publisher": "true"},
+			expected: false,
+		},
+		{
+			name:     "Explicit publish-tag dispatch skipped validation",
+			needs:    map[string]string{"validation": "skipped", "lint": "success", "build": "success"},
+			outputs:  map[string]string{"run_code_checks": "true", "run_build": "true", "run_release": "false", "run_publisher": "true"},
+			expected: false,
 		},
 		{
 			name:     "A required release-critical job succeeding",

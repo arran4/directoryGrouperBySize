@@ -84,8 +84,6 @@ jobs:
                run_build=true
             elif [[ "$mode" == "publish-tag" ]]; then
                if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-                  run_code_checks=false
-                  run_build=false
                   run_publisher=true
                else
                   echo "Error: publish-tag mode requires a v* tag context. Found: $GITHUB_REF" >&2
