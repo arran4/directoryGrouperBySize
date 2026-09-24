@@ -84,8 +84,6 @@ jobs:
                run_build=true
             elif [[ "$mode" == "publish-tag" ]]; then
                if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-                  run_code_checks=false
-                  run_build=false
                   run_publisher=true
                else
                   echo "Error: publish-tag mode requires a v* tag context. Found: $GITHUB_REF" >&2
@@ -214,7 +212,11 @@ jobs:
   release-ready:
     name: Release Quality Gates Passed
     needs: [route, validation, lint, build]
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    if: >-
+      always() &&
+      (needs.route.outputs.run_release == 'true' || needs.route.outputs.run_publisher == 'true') &&
+      (needs.route.outputs.run_code_checks == 'false' || (needs.validation.result == 'success' && needs.lint.result == 'success')) &&
+      (needs.route.outputs.run_build == 'false' || needs.build.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - run: echo "All release quality gates passed."
@@ -222,7 +224,7 @@ jobs:
   prepare-release-tag:
     name: Prepare Release Tag
     needs: [route, release-ready]
-    if: ${{ needs.route.outputs.run_release == 'true' }}
+    if: ${{ needs.route.outputs.run_release == 'true' && needs.release-ready.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -342,7 +344,7 @@ jobs:
   publisher:
     name: Release Publisher
     needs: [route, release-ready]
-    if: ${{ needs.route.outputs.run_publisher == 'true' }}
+    if: ${{ needs.route.outputs.run_publisher == 'true' && needs.release-ready.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
