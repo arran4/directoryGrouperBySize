@@ -30,7 +30,7 @@ func extractRouteScript(t *testing.T) string {
 		}
 
 		if inScript {
-		    trimmed := strings.TrimSpace(line)
+			trimmed := strings.TrimSpace(line)
 			if trimmed == "" || strings.HasPrefix(line, "          ") { // Script indentation is 10 spaces
 				script = append(script, line)
 			} else {
@@ -69,20 +69,25 @@ func testRouteExecution(t *testing.T, env map[string]string) map[string]string {
 	// Read outputs
 	outputs := make(map[string]string)
 	if err != nil {
-	    outputs["error"] = fmt.Sprintf("Command failed: %v. Output: %s", err, string(out))
+		outputs["error"] = fmt.Sprintf("Command failed: %v. Output: %s", err, string(out))
 	} else {
-	outFile, err := os.Open(outPath)
-	if err == nil {
-		scanner := bufio.NewScanner(outFile)
-		for scanner.Scan() {
-			line := scanner.Text()
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				outputs[parts[0]] = parts[1]
+		outFile, err := os.Open(outPath)
+		if err == nil {
+			scanner := bufio.NewScanner(outFile)
+			for scanner.Scan() {
+				line := scanner.Text()
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					outputs[parts[0]] = parts[1]
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				t.Fatalf("Failed to read output file: %v", err)
+			}
+			if err := outFile.Close(); err != nil {
+				t.Fatalf("Failed to close output file: %v", err)
 			}
 		}
-		outFile.Close()
-	}
 	}
 
 	return outputs
@@ -99,7 +104,7 @@ func TestRoutePublishTagSuccess(t *testing.T) {
 	outputs := testRouteExecution(t, env)
 
 	if outputs["error"] != "" {
-	    t.Fatalf("Script failed: %s", outputs["error"])
+		t.Fatalf("Script failed: %s", outputs["error"])
 	}
 
 	if outputs["run_code_checks"] != "true" {
@@ -124,6 +129,6 @@ func TestRoutePublishTagFailure(t *testing.T) {
 	outputs := testRouteExecution(t, env)
 
 	if outputs["error"] == "" {
-	    t.Fatalf("Expected script to fail on invalid ref, but it succeeded")
+		t.Fatalf("Expected script to fail on invalid ref, but it succeeded")
 	}
 }
