@@ -2,22 +2,18 @@ package directoryGrouperBySize
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
+	"time"
 )
 
 func mustMkdir(t *testing.T, path string, perm os.FileMode) {
 	t.Helper()
 	if err := os.Mkdir(path, perm); err != nil {
 		t.Fatalf("mkdir %s: %v", path, err)
-	}
-}
-
-func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
-	t.Helper()
-	if err := os.MkdirAll(path, perm); err != nil {
-		t.Fatalf("mkdir -p %s: %v", path, err)
 	}
 }
 
@@ -28,16 +24,12 @@ func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 	}
 }
 
-func TestScanDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	var err error
-
+func TestScanFS(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Empty root
-	emptyDir := filepath.Join(tmpDir, "empty")
-	mustMkdir(t, emptyDir, 0755)
-	entries, err := ScanDirectory(ctx, emptyDir)
+	emptyFS := fstest.MapFS{}
+	entries, err := scanFS(ctx, emptyFS, "empty")
 	if err != nil {
 		t.Errorf("expected no error for empty dir, got %v", err)
 	}
@@ -46,17 +38,12 @@ func TestScanDirectory(t *testing.T) {
 	}
 
 	// 2. Immediate files, unusual characters
-	filesDir := filepath.Join(tmpDir, "files")
-	mustMkdir(t, filesDir, 0755)
-	fileNames := []string{"a.txt", " spaces and \n newlines.txt", "c.dat"}
-	fileSizes := []int64{10, 20, 30}
-	for i, name := range fileNames {
-		path := filepath.Join(filesDir, name)
-		data := make([]byte, fileSizes[i])
-		mustWriteFile(t, path, data, 0644)
+	filesFS := fstest.MapFS{
+		"a.txt":                       &fstest.MapFile{Data: make([]byte, 10)},
+		" spaces and \n newlines.txt": &fstest.MapFile{Data: make([]byte, 20)},
+		"c.dat":                       &fstest.MapFile{Data: make([]byte, 30)},
 	}
-
-	entries, err = ScanDirectory(ctx, filesDir)
+	entries, err = scanFS(ctx, filesFS, "files")
 	if err != nil {
 		t.Errorf("expected no error for files dir, got %v", err)
 	}
@@ -77,17 +64,12 @@ func TestScanDirectory(t *testing.T) {
 	}
 
 	// 3. Nested directories
-	nestedDir := filepath.Join(tmpDir, "nested")
-	mustMkdirAll(t, filepath.Join(nestedDir, "sub1", "sub2"), 0755)
-
-	// Add file in sub1: 15 bytes
-	mustWriteFile(t, filepath.Join(nestedDir, "sub1", "file1.txt"), make([]byte, 15), 0644)
-	// Add file in sub2: 25 bytes
-	mustWriteFile(t, filepath.Join(nestedDir, "sub1", "sub2", "file2.txt"), make([]byte, 25), 0644)
-	// Add file in nestedDir (immediate): 5 bytes
-	mustWriteFile(t, filepath.Join(nestedDir, "file3.txt"), make([]byte, 5), 0644)
-
-	entries, err = ScanDirectory(ctx, nestedDir)
+	nestedFS := fstest.MapFS{
+		"sub1/file1.txt":      &fstest.MapFile{Data: make([]byte, 15)},
+		"sub1/sub2/file2.txt": &fstest.MapFile{Data: make([]byte, 25)},
+		"file3.txt":           &fstest.MapFile{Data: make([]byte, 5)},
+	}
+	entries, err = scanFS(ctx, nestedFS, "nested")
 	if err != nil {
 		t.Errorf("expected no error for nested dir, got %v", err)
 	}
@@ -111,7 +93,84 @@ func TestScanDirectory(t *testing.T) {
 		}
 	}
 
-	// 4. Symlink semantics (Immediate and Nested)
+	// 4. Context cancellation
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+	_, err = scanFS(cancelCtx, filesFS, "cancel")
+	if err == nil || err != context.Canceled {
+		t.Errorf("expected context.Canceled error, got %v", err)
+	}
+
+	// 5. Large apparent file sizes
+	largeFS := largeVirtualFS{}
+	entries, err = scanFS(ctx, largeFS, "large")
+	if err != nil {
+		t.Errorf("expected no error for large file, got %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].SizeBytes != 5*1024*1024*1024 {
+		t.Errorf("expected 5GB exactly, got %d", entries[0].SizeBytes)
+	}
+}
+
+// Custom FS implementation to simulate a 5GB file without memory allocation
+type largeVirtualFS struct{}
+
+func (largeVirtualFS) Open(name string) (fs.File, error) {
+	if name == "." {
+		return dirFile{}, nil
+	}
+	if name == "large.dat" {
+		return largeFile{}, nil
+	}
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+}
+func (largeVirtualFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if name == "." {
+		return []fs.DirEntry{fs.FileInfoToDirEntry(largeInfo{})}, nil
+	}
+	return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrNotExist}
+}
+
+type dirFile struct{}
+
+func (dirFile) Stat() (fs.FileInfo, error) { return dirInfo{}, nil }
+func (dirFile) Read([]byte) (int, error)   { return 0, os.ErrInvalid }
+func (dirFile) Close() error               { return nil }
+
+type dirInfo struct{}
+
+func (dirInfo) Name() string       { return "." }
+func (dirInfo) Size() int64        { return 0 }
+func (dirInfo) Mode() os.FileMode  { return fs.ModeDir | 0755 }
+func (dirInfo) ModTime() time.Time { return time.Time{} }
+func (dirInfo) IsDir() bool        { return true }
+func (dirInfo) Sys() any           { return nil }
+
+type largeFile struct{}
+
+func (largeFile) Stat() (fs.FileInfo, error) { return largeInfo{}, nil }
+func (largeFile) Read([]byte) (int, error)   { return 0, nil }
+func (largeFile) Close() error               { return nil }
+
+type largeInfo struct{}
+
+func (largeInfo) Name() string       { return "large.dat" }
+func (largeInfo) Size() int64        { return 5 * 1024 * 1024 * 1024 }
+func (largeInfo) Mode() os.FileMode  { return 0644 }
+func (largeInfo) ModTime() time.Time { return time.Time{} }
+func (largeInfo) IsDir() bool        { return false }
+func (largeInfo) Sys() any           { return nil }
+
+func TestScanDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	var err error
+
+	ctx := context.Background()
+
+	// Symlink semantics (Immediate and Nested)
 	symlinkDir := filepath.Join(tmpDir, "symlinks")
 	mustMkdir(t, symlinkDir, 0755)
 
@@ -136,7 +195,7 @@ func TestScanDirectory(t *testing.T) {
 	errDirSym := os.Symlink("../target_dir", dirLinkPath)
 
 	if errFileSym == nil && errDirSym == nil {
-		entries, err = ScanDirectory(ctx, symlinkDir)
+		entries, err := ScanDirectory(ctx, symlinkDir)
 		if err != nil {
 			t.Errorf("expected no error for symlink dir, got %v", err)
 		}
@@ -152,7 +211,7 @@ func TestScanDirectory(t *testing.T) {
 		t.Logf("skipping symlink test as symlink creation failed (common on Windows without admin): file=%v dir=%v", errFileSym, errDirSym)
 	}
 
-	// 5. Unreadable directory (permission error)
+	// Unreadable directory (permission error)
 	unreadableDir := filepath.Join(tmpDir, "unreadable")
 	mustMkdir(t, unreadableDir, 0755)
 	subUnreadable := filepath.Join(unreadableDir, "sub")
@@ -175,20 +234,7 @@ func TestScanDirectory(t *testing.T) {
 		t.Fatalf("restore permissions on unreadable directory: %v", err)
 	}
 
-	// 6. Context cancellation
-	cancelDir := filepath.Join(tmpDir, "cancel")
-	mustMkdir(t, cancelDir, 0755)
-	mustWriteFile(t, filepath.Join(cancelDir, "a.txt"), make([]byte, 10), 0644)
-
-	cancelCtx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	_, err = ScanDirectory(cancelCtx, cancelDir)
-	if err == nil || err != context.Canceled {
-		t.Errorf("expected context.Canceled error, got %v", err)
-	}
-
-	// 7. Large file
+	// Large file
 	largeDir := filepath.Join(tmpDir, "large")
 	mustMkdir(t, largeDir, 0755)
 	largeFile := filepath.Join(largeDir, "large.dat")
@@ -214,7 +260,7 @@ func TestScanDirectory(t *testing.T) {
 		t.Fatalf("failed to close large file: %v", err)
 	}
 
-	entries, err = ScanDirectory(ctx, largeDir)
+	entries, err := ScanDirectory(ctx, largeDir)
 	if err != nil {
 		t.Errorf("expected no error for large file, got %v", err)
 	}
