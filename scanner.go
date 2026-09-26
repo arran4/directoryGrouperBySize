@@ -27,9 +27,13 @@ import (
 //     equality is guaranteed for directory trees containing purely regular files and directories,
 //     but may vary when symlinks or other non-regular entries are present.
 func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
-	dirEntries, err := os.ReadDir(root)
+	return scanFS(ctx, os.DirFS(root), root)
+}
+
+func scanFS(ctx context.Context, fsys fs.FS, rootName string) ([]Entry, error) {
+	dirEntries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return nil, fmt.Errorf("error reading directory %q: %w", root, err)
+		return nil, fmt.Errorf("error reading directory %q: %w", rootName, err)
 	}
 
 	var results []Entry
@@ -39,7 +43,7 @@ func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 			return nil, err
 		}
 
-		childPath := filepath.Join(root, de.Name())
+		childPath := filepath.Join(rootName, de.Name())
 
 		info, err := de.Info()
 		if err != nil {
@@ -50,9 +54,11 @@ func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 
 		if info.IsDir() {
 			// Calculate size of directory recursively
-			err := filepath.WalkDir(childPath, func(path string, d fs.DirEntry, err error) error {
+			err := fs.WalkDir(fsys, de.Name(), func(path string, d fs.DirEntry, err error) error {
+				fullPath := filepath.Join(rootName, filepath.FromSlash(path))
+
 				if err != nil {
-					return fmt.Errorf("error accessing path %q: %w", path, err)
+					return fmt.Errorf("error accessing path %q: %w", fullPath, err)
 				}
 
 				if err := ctx.Err(); err != nil {
@@ -62,7 +68,7 @@ func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 				if !d.IsDir() {
 					dInfo, err := d.Info()
 					if err != nil {
-						return fmt.Errorf("error getting info for %q: %w", path, err)
+						return fmt.Errorf("error getting info for %q: %w", fullPath, err)
 					}
 
 					totalSize += dInfo.Size()
@@ -82,6 +88,6 @@ func ScanDirectory(ctx context.Context, root string) ([]Entry, error) {
 		})
 	}
 
-	// os.ReadDir returns entries sorted by filename, ensuring a deterministic order.
+	// fs.ReadDir returns entries sorted by filename, ensuring a deterministic order.
 	return results, nil
 }
