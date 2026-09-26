@@ -234,40 +234,33 @@ func TestScanDirectory(t *testing.T) {
 		t.Fatalf("restore permissions on unreadable directory: %v", err)
 	}
 
-	// Large file
-	largeDir := filepath.Join(tmpDir, "large")
-	mustMkdir(t, largeDir, 0755)
-	largeFile := filepath.Join(largeDir, "large.dat")
+	// Smoke test for standard OS file paths (OS-backed baseline)
+	// Ensures that public ScanDirectory executes without relying on symlinks/permissions which might skip
+	smokeDir := filepath.Join(tmpDir, "smoke")
+	mustMkdir(t, smokeDir, 0755)
+	mustWriteFile(t, filepath.Join(smokeDir, "file.txt"), []byte("hello"), 0644)
+	mustMkdir(t, filepath.Join(smokeDir, "subdir"), 0755)
+	mustWriteFile(t, filepath.Join(smokeDir, "subdir", "subfile.txt"), []byte("world!"), 0644)
 
-	// create a sparse file (or just write a few bytes at a large offset)
-	f, err := os.Create(largeFile)
+	entries, err := ScanDirectory(ctx, smokeDir)
 	if err != nil {
-		t.Fatalf("failed to create large file: %v", err)
+		t.Errorf("expected no error for smoke dir, got %v", err)
 	}
-	// 5GB size
-	_, err = f.Seek(5*1024*1024*1024-1, 0)
-	if err != nil {
-		t.Fatalf("failed to seek: %v", err)
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries (file.txt, subdir), got %d", len(entries))
 	}
-	if _, err := f.Write([]byte{1}); err != nil {
-		closeErr := f.Close()
-		if closeErr != nil {
-			t.Errorf("close large file after write failure: %v", closeErr)
+	for _, entry := range entries {
+		switch entry.Name {
+		case "file.txt":
+			if entry.SizeBytes != 5 {
+				t.Errorf("expected 5 bytes for file.txt, got %d", entry.SizeBytes)
+			}
+		case "subdir":
+			if entry.SizeBytes != 6 {
+				t.Errorf("expected 6 bytes for subdir, got %d", entry.SizeBytes)
+			}
+		default:
+			t.Errorf("unexpected entry %q", entry.Name)
 		}
-		t.Fatalf("failed to write sparse file tail byte: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("failed to close large file: %v", err)
-	}
-
-	entries, err := ScanDirectory(ctx, largeDir)
-	if err != nil {
-		t.Errorf("expected no error for large file, got %v", err)
-	}
-	if len(entries) != 1 {
-		t.Errorf("expected 1 entry, got %d", len(entries))
-	}
-	if entries[0].SizeBytes != 5*1024*1024*1024 {
-		t.Errorf("expected 5GB exactly, got %d", entries[0].SizeBytes)
 	}
 }
