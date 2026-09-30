@@ -263,4 +263,59 @@ func TestScanDirectory(t *testing.T) {
 			t.Errorf("unexpected entry %q", entry.Name)
 		}
 	}
+
+}
+
+func TestScanDirectory_Hardlinks(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	parentDir := filepath.Join(tmpDir, "parent")
+	mustMkdir(t, parentDir, 0755)
+	hardlinksDir := filepath.Join(parentDir, "hardlinks")
+	mustMkdir(t, hardlinksDir, 0755)
+
+	originalFile := filepath.Join(hardlinksDir, "original.txt")
+	linkedFile := filepath.Join(hardlinksDir, "link.txt")
+
+	mustWriteFile(t, originalFile, make([]byte, 13), 0644)
+
+	errLink := os.Link(originalFile, linkedFile)
+	if errLink != nil {
+		t.Skipf("skipping hard link test because creation failed: %v", errLink)
+	}
+
+	// Test scanning the hardlinks directory directly (both entries should be returned, 13 bytes each)
+	entries, err := ScanDirectory(ctx, hardlinksDir)
+	if err != nil {
+		t.Errorf("expected no error scanning hardlinks dir, got %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries in hardlinks dir, got %d", len(entries))
+	} else {
+		for _, entry := range entries {
+			if entry.Name != "original.txt" && entry.Name != "link.txt" {
+				t.Errorf("unexpected entry in hardlinks dir: %q", entry.Name)
+			}
+			if entry.SizeBytes != 13 {
+				t.Errorf("expected 13 bytes for %q, got %d", entry.Name, entry.SizeBytes)
+			}
+		}
+	}
+
+	// Test scanning the parent directory (recursive sum should be 26 bytes)
+	entries, err = ScanDirectory(ctx, parentDir)
+	if err != nil {
+		t.Errorf("expected no error scanning parent dir, got %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry in parent dir, got %d", len(entries))
+	} else {
+		if entries[0].Name != "hardlinks" {
+			t.Errorf("expected entry 'hardlinks', got %q", entries[0].Name)
+		}
+		if entries[0].SizeBytes != 26 {
+			t.Errorf("expected 26 bytes for 'hardlinks' directory (2 * 13 bytes), got %d", entries[0].SizeBytes)
+		}
+	}
 }
