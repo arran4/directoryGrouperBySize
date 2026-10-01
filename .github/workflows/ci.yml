@@ -192,10 +192,25 @@ jobs:
           branch: automation/lint-fix
           delete-branch: true
 
+  verify-generation:
+    name: Verify Generated Code
+    needs: [route]
+    if: ${{ needs.route.outputs.run_code_checks == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: true
+      - run: go generate ./...
+      - name: Ensure working directory is clean
+        run: git diff --exit-code
+
   build:
     name: Build Artifacts
-    needs: [route, validation, lint]
-    if: ${{ always() && needs.route.outputs.run_build == 'true' && (needs.validation.result == 'success' || needs.validation.result == 'skipped') && (needs.lint.result == 'success' || needs.lint.result == 'skipped') }}
+    needs: [route, validation, lint, verify-generation]
+    if: ${{ always() && needs.route.outputs.run_build == 'true' && (needs.validation.result == 'success' || needs.validation.result == 'skipped') && (needs.lint.result == 'success' || needs.lint.result == 'skipped') && (needs.verify-generation.result == 'success' || needs.verify-generation.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -211,11 +226,11 @@ jobs:
 
   release-ready:
     name: Release Quality Gates Passed
-    needs: [route, validation, lint, build]
+    needs: [route, validation, lint, verify-generation, build]
     if: >-
       always() &&
       (needs.route.outputs.run_release == 'true' || needs.route.outputs.run_publisher == 'true') &&
-      (needs.route.outputs.run_code_checks == 'false' || (needs.validation.result == 'success' && needs.lint.result == 'success')) &&
+      (needs.route.outputs.run_code_checks == 'false' || (needs.validation.result == 'success' && needs.lint.result == 'success' && needs.verify-generation.result == 'success')) &&
       (needs.route.outputs.run_build == 'false' || needs.build.result == 'success')
     runs-on: ubuntu-latest
     steps:

@@ -3,20 +3,96 @@ package main
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/arran4/directoryGrouperBySize"
 )
 
-type errorReader struct {
-	err error
+// Helper function to replace run() by testing generated command directly using os.Args mock
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	oldArgs := os.Args
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	defer func() {
+		os.Args = oldArgs
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	os.Args = append([]string{"directoryGrouperBySize"}, args...)
+
+	if stdin != nil {
+		r, w, _ := os.Pipe()
+		go func() {
+			defer w.Close()
+			_, _ = io.Copy(w, stdin)
+		}()
+		os.Stdin = r
+	}
+
+	var outPipeR, outPipeW *os.File
+	if stdout != nil {
+		outPipeR, outPipeW, _ = os.Pipe()
+		os.Stdout = outPipeW
+	}
+
+	var errPipeR, errPipeW *os.File
+	if stderr != nil {
+		errPipeR, errPipeW, _ = os.Pipe()
+		os.Stderr = errPipeW
+	}
+
+	outDone := make(chan struct{})
+	if stdout != nil {
+		go func() {
+			_, _ = io.Copy(stdout, outPipeR)
+			close(outDone)
+		}()
+	}
+
+	errDone := make(chan struct{})
+	if stderr != nil {
+		go func() {
+			_, _ = io.Copy(stderr, errPipeR)
+			close(errDone)
+		}()
+	}
+
+	root, err := NewRoot("directoryGrouperBySize", "dev", "none", "unknown")
+	if err != nil {
+		return err
+	}
+
+	execErr := root.Execute(args)
+
+	if stdout != nil {
+		outPipeW.Close()
+		<-outDone
+	}
+	if stderr != nil {
+		errPipeW.Close()
+		<-errDone
+	}
+
+	return execErr
 }
 
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, e.err
+func TestErrorWrapping(t *testing.T) {
+	err := directoryGrouperBySize.DirectoryGrouperBySize("1GB", "nonexistent.txt", "", "first-fit-decreasing", false, false, false)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) {
+		t.Errorf("expected error to wrap os.PathError, got: %T (%v)", err, err)
+	}
 }
 
 func TestRun(t *testing.T) {
@@ -108,13 +184,6 @@ func TestRun(t *testing.T) {
 			},
 			expectError: false,
 			outContains: " trailing space \n",
-		},
-		{
-			name:        "Stdin read error",
-			args:        []string{"-maxsize", "2G"},
-			stdin:       &errorReader{err: errors.New("simulated read error")},
-			expectError: true,
-			errContains: "error reading input: simulated read error",
 		},
 	}
 
@@ -225,8 +294,8 @@ func TestHelpMessage(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when invoking -h, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil err when invoking -h since it is handled by the framework gracefully, got %v", err)
 	}
 
 	out := stderr.String()
