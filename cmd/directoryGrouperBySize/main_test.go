@@ -364,7 +364,9 @@ func TestValidRunFile(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	dir := t.TempDir()
 	filepath := filepath.Join(dir, "valid_file.txt")
-	_ = os.WriteFile(filepath, []byte("1G folder1\n500M folder2\n"), 0644)
+	if err := os.WriteFile(filepath, []byte("1G folder1\n500M folder2\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
 	err := run([]string{"-maxsize", "2G", "-f", filepath}, strings.NewReader(""), &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
