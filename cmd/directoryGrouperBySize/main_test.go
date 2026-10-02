@@ -309,12 +309,19 @@ func TestHelpMessage(t *testing.T) {
 		t.Fatalf("expected nil err when invoking -h since it is handled by the framework gracefully, got %v", err)
 	}
 
+	if stdout.String() != "" {
+		t.Errorf("expected stdout to be exactly empty, got: %q", stdout.String())
+	}
+
 	out := stderr.String()
 	if !strings.Contains(out, "Directory to scan internally") {
 		t.Errorf("expected help message to describe the internal scanner, got:\n%s", out)
 	}
 	if strings.Contains(out, "du -sh") {
 		t.Errorf("expected help message not to mention du -sh, got:\n%s", out)
+	}
+	if strings.Contains(out, "please provide a valid -maxsize argument") {
+		t.Errorf("expected help message not to contain validation diagnostic, got:\n%s", out)
 	}
 }
 
@@ -384,19 +391,5 @@ func TestValidRunNull(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Disk 1") {
 		t.Errorf("expected Disk 1, got %s", stdout.String())
-	}
-}
-
-func TestHelpMessageExtended(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("expected nil err when invoking -h since it is handled by the framework gracefully, got %v", err)
-	}
-
-	out := stderr.String()
-	if strings.Contains(out, "please provide a valid -maxsize argument") {
-		t.Errorf("expected help message not to contain validation diagnostic, got:\n%s", out)
 	}
 }
