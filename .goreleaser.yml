@@ -9,6 +9,8 @@ builds:
     id: "directoryGrouperBySize"
     binary: "directoryGrouperBySize"
     dir: cmd/directoryGrouperBySize
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X github.com/arran4/directoryGrouperBySize.version={{.Version}} -X github.com/arran4/directoryGrouperBySize.commit={{.Commit}} -X github.com/arran4/directoryGrouperBySize.date={{.Date}}
     env:
       - CGO_ENABLED=0
     goos:
