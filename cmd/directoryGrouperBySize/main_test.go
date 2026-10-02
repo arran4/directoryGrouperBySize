@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-
 )
 
 // Helper function to replace run() by testing generated command directly using os.Args mock
@@ -97,6 +95,14 @@ func TestErrorWrapping(t *testing.T) {
 	var pathErr *os.PathError
 	if !errors.As(err, &pathErr) {
 		t.Errorf("expected error to wrap os.PathError, got: %T (%v)", err, err)
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "directorygrouperbysize failed: directorygrouperbysize failed:") {
+		t.Errorf("expected error not to contain duplicated prefix, got: %v", errMsg)
+	}
+	if !strings.Contains(errMsg, "directorygrouperbysize failed:") {
+		t.Errorf("expected error to contain useful context prefix, got: %v", errMsg)
 	}
 }
 
@@ -323,5 +329,33 @@ func TestRun_UnknownStrategy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown strategy: bad-strategy") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGeneratedVersionCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"-maxsize", "1G", "version"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error running version command: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Version: dev") || !strings.Contains(out, "Commit: none") {
+		t.Errorf("expected version output to contain dev and none, got: %s", out)
+	}
+}
+
+func TestLegacyVersionFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	// `-version` triggers the application logic.
+	// The application logic reads its own `version` variable.
+	err := run([]string{"-version"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error running -version flag: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "directoryGrouperBySize dev") {
+		t.Errorf("expected -version output to contain 'directoryGrouperBySize dev', got: %s", out)
 	}
 }

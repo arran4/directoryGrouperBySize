@@ -19,7 +19,7 @@ import (
 //	scan: (-scan; default: "") Directory to scan internally (logical/apparent byte sizes)
 //	strategy: (-strategy; default: "first-fit-decreasing") Grouping algorithm strategy to use
 //	null: (-0; --null; default: false) Use zero bytes to separate records
-//	versionFlag: (-version; default: false) Print version information and exit
+//	version: (-version; default: false) Print version information and exit
 //
 // Supported strategy values:
 //
