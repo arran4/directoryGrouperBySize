@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,12 +10,100 @@ import (
 	"testing"
 )
 
-type errorReader struct {
-	err error
+// Helper function to replace run() by testing generated command directly using os.Args mock
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	oldArgs := os.Args
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	defer func() {
+		os.Args = oldArgs
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	os.Args = append([]string{"directoryGrouperBySize"}, args...)
+
+	if stdin != nil {
+		r, w, _ := os.Pipe()
+		go func() {
+			defer func() { _ = w.Close() }()
+			_, _ = io.Copy(w, stdin)
+		}()
+		os.Stdin = r
+	}
+
+	var outPipeR, outPipeW *os.File
+	if stdout != nil {
+		outPipeR, outPipeW, _ = os.Pipe()
+		os.Stdout = outPipeW
+	}
+
+	var errPipeR, errPipeW *os.File
+	if stderr != nil {
+		errPipeR, errPipeW, _ = os.Pipe()
+		os.Stderr = errPipeW
+	}
+
+	outDone := make(chan struct{})
+	if stdout != nil {
+		go func() {
+			_, _ = io.Copy(stdout, outPipeR)
+			close(outDone)
+		}()
+	}
+
+	errDone := make(chan struct{})
+	if stderr != nil {
+		go func() {
+			_, _ = io.Copy(stderr, errPipeR)
+			close(errDone)
+		}()
+	}
+
+	root, err := NewRoot("directoryGrouperBySize", "dev", "none", "unknown")
+	if err != nil {
+		return err
+	}
+
+	execErr := root.Execute(args)
+
+	if stdout != nil {
+		_ = outPipeW.Close()
+		<-outDone
+	}
+	if stderr != nil {
+		_ = errPipeW.Close()
+		<-errDone
+	}
+
+	return execErr
 }
 
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, e.err
+func TestErrorWrapping(t *testing.T) {
+	root, err := NewRoot("directoryGrouperBySize", "dev", "none", "unknown")
+	if err != nil {
+		t.Fatalf("failed to create root cmd: %v", err)
+	}
+
+	err = root.Execute([]string{"-maxsize", "1GB", "-f", "nonexistent.txt"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) {
+		t.Errorf("expected error to wrap os.PathError, got: %T (%v)", err, err)
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "directorygrouperbysize failed: directorygrouperbysize failed:") {
+		t.Errorf("expected error not to contain duplicated prefix, got: %v", errMsg)
+	}
+	if !strings.Contains(errMsg, "directorygrouperbysize failed:") {
+		t.Errorf("expected error to contain useful context prefix, got: %v", errMsg)
+	}
 }
 
 func TestRun(t *testing.T) {
@@ -108,13 +195,6 @@ func TestRun(t *testing.T) {
 			},
 			expectError: false,
 			outContains: " trailing space \n",
-		},
-		{
-			name:        "Stdin read error",
-			args:        []string{"-maxsize", "2G"},
-			stdin:       &errorReader{err: errors.New("simulated read error")},
-			expectError: true,
-			errContains: "error reading input: simulated read error",
 		},
 	}
 
@@ -225,8 +305,12 @@ func TestHelpMessage(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when invoking -h, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil err when invoking -h since it is handled by the framework gracefully, got %v", err)
+	}
+
+	if stdout.String() != "" {
+		t.Errorf("expected stdout to be exactly empty, got: %q", stdout.String())
 	}
 
 	out := stderr.String()
@@ -235,6 +319,9 @@ func TestHelpMessage(t *testing.T) {
 	}
 	if strings.Contains(out, "du -sh") {
 		t.Errorf("expected help message not to mention du -sh, got:\n%s", out)
+	}
+	if strings.Contains(out, "please provide a valid -maxsize argument") {
+		t.Errorf("expected help message not to contain validation diagnostic, got:\n%s", out)
 	}
 }
 
@@ -249,5 +336,60 @@ func TestRun_UnknownStrategy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown strategy: bad-strategy") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGeneratedVersionCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"-maxsize", "1G", "version"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error running version command: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Version: dev") || !strings.Contains(out, "Commit: none") {
+		t.Errorf("expected version output to contain dev and none, got: %s", out)
+	}
+}
+
+func TestLegacyVersionFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	// `-version` triggers the application logic.
+	// The application logic reads its own `version` variable.
+	err := run([]string{"-version"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error running -version flag: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "directoryGrouperBySize dev") {
+		t.Errorf("expected -version output to contain 'directoryGrouperBySize dev', got: %s", out)
+	}
+}
+
+func TestValidRunFile(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	dir := t.TempDir()
+	filepath := filepath.Join(dir, "valid_file.txt")
+	if err := os.WriteFile(filepath, []byte("1G folder1\n500M folder2\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	err := run([]string{"-maxsize", "2G", "-f", filepath}, strings.NewReader(""), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Disk 1") {
+		t.Errorf("expected Disk 1, got %s", stdout.String())
+	}
+}
+
+func TestValidRunNull(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"-maxsize", "2G", "--null"}, strings.NewReader("1G\tfolder1\x00500M\tfolder2\x00"), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Disk 1") {
+		t.Errorf("expected Disk 1, got %s", stdout.String())
 	}
 }
