@@ -156,13 +156,36 @@ jobs:
           go-version-file: go.mod
       - run: go get -u ./... && go mod tidy
       - name: Create Pull Request
+        id: maintenance-pr
         if: ${{ github.event_name == 'schedule' || inputs.allow_prs != false }}
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: monthly dependency update"
           title: "chore: monthly dependency update"
           branch: automation/maintenance
           delete-branch: true
+      - name: Report blocked maintenance PR creation
+        if: ${{ steps.maintenance-pr.outcome == 'failure' }}
+        env:
+          AUTOMATION_BRANCH: automation/maintenance
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads origin "$AUTOMATION_BRANCH" >/dev/null 2>&1; then
+            echo "PR creation failed before the expected automation branch was available." >&2
+            exit 1
+          fi
+          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${AUTOMATION_BRANCH}?expand=1"
+          echo "::warning::The maintenance branch was pushed, but GitHub blocked automatic pull-request creation. Open it manually: $compare_url"
+          {
+            echo "### Maintenance pull request requires manual creation"
+            echo
+            echo "The automation branch was pushed successfully, but GitHub blocked the workflow token from opening a pull request."
+            echo
+            echo "- [Open the maintenance pull request manually]($compare_url)"
+            echo "- To restore automatic PR creation, enable **Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests**."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   autofix:
     name: Autofix Formatting
@@ -184,13 +207,36 @@ jobs:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --fix
       - name: Create Pull Request
+        id: autofix-pr
         if: ${{ github.event_name == 'schedule' || inputs.allow_prs != false }}
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "style: auto-format code and lint fixes"
           title: "style: auto-format code and lint fixes"
           branch: automation/lint-fix
           delete-branch: true
+      - name: Report blocked autofix PR creation
+        if: ${{ steps.autofix-pr.outcome == 'failure' }}
+        env:
+          AUTOMATION_BRANCH: automation/lint-fix
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads origin "$AUTOMATION_BRANCH" >/dev/null 2>&1; then
+            echo "PR creation failed before the expected automation branch was available." >&2
+            exit 1
+          fi
+          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${AUTOMATION_BRANCH}?expand=1"
+          echo "::warning::The autofix branch was pushed, but GitHub blocked automatic pull-request creation. Open it manually: $compare_url"
+          {
+            echo "### Autofix pull request requires manual creation"
+            echo
+            echo "The automation branch was pushed successfully, but GitHub blocked the workflow token from opening a pull request."
+            echo
+            echo "- [Open the autofix pull request manually]($compare_url)"
+            echo "- To restore automatic PR creation, enable **Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests**."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   verify-generation:
     name: Verify Generated Code
